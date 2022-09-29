@@ -1,0 +1,23 @@
+[package]
+name = "randcap"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+cortex-m = { version = "0.7", features = ["critical-section-single-core"]}
+
+getrandom = { version = "0.2", default-features = false, features = ["custom"]}
+critical-section = "1.1"
+sha2 = { version = "0.10", default-features = false }
+rand_chacha = "0.3"
+
+log = { version = "0.4", optional = true }
+
+embassy-rp = { version = "0.1.0",  features = ["defmt", "unstable-traits", "nightly", "unstable-pac"] }
+
+[features]
+default = [ "log" ]
+
+[patch.crates-io]
+embassy-rp = { git = "https://github.com/embassy-rs/embassy", rev = "1d6f5493e7764767eb592e0b90d6b07d46b100ca" }
