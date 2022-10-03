@@ -1,4 +1,8 @@
-use defmt::{debug, info, panic};
+#[cfg(not(feature = "defmt"))]
+use log::{debug, info, warn, error};
+
+#[cfg(feature = "defmt")]
+use defmt::{error, debug, info, panic};
 
 use cortex_m::peripheral::SYST;
 use embassy_rp::gpio::{Flex, Pin, Pull};
@@ -30,8 +34,8 @@ use embassy_rp::pac;
 ///  The random output is t_down and t_up time.
 
 /*
-Experimental values:
-0.1uF "monolithic" perhaps from futurlec?
+Experimental capacitor values:
+0.1uF "monolithic" through hole, perhaps from futurlec?
 GPIO6
 0.003717 INFO  initial pulldown del is 346730
 0.003710 INFO  initial pulldown del is 345770
@@ -49,8 +53,6 @@ GPIO13
 0.002547 INFO  initial pulldown del is 200170
 */
 
-/// Extra iterations prior to taking output, so that `overshoot` is nice and noisy.
-const WARMUP: usize = 8;
 
 // Range of cycle counts for overshoot. These values are somewhat dependent on the
 // cpu frequency and capacitor values.
@@ -61,12 +63,22 @@ const LOW_OVER: u32 = 1000;
 // Power of two for faster modulo
 const HIGH_OVER: u32 = LOW_OVER + 16384;
 
-struct Timer<'t> {
+// Assume worst case from rp2040 datasheet.
+// 3.3v vdd, 2v logical high voltage, 50kohm pullup, 0.01uF capacitor, 125Mhz clock.
+// 0.5 * 50e3 * 0.01e-6 * 125e6 = 31250.0
+// Then allow 50% leeway for tolerances.
+const MIN_CAPACITOR_DEL: u32 = 15000;
+
+/// Extra iterations prior to taking output, so that `overshoot` is nice and noisy.
+const WARMUP: usize = 16;
+
+/// Wraps timing with SYST. The clock source must already be configured.
+struct SyTi<'t> {
     syst: &'t mut SYST,
     t1: u32,
 }
 
-impl<'t> Timer<'t> {
+impl<'t> SyTi<'t> {
     fn new(syst: &'t mut SYST) -> Self {
         syst.clear_current();
         syst.enable_counter();
@@ -80,6 +92,7 @@ impl<'t> Timer<'t> {
     fn done(self) -> Result<u32, ()> {
         let t2 = SYST::get_current();
         if self.syst.has_wrapped() {
+            error!("SYST wrapped");
             return Err(());
         }
         self.syst.disable_counter();
@@ -99,7 +112,7 @@ where
     F: FnMut(u32),
 {
     syst.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
-    // prescribed sequence
+    // prescribed sequence for setup
     syst.set_reload(10_000_000 - 1);
     syst.clear_current();
     syst.enable_counter();
@@ -108,8 +121,8 @@ where
     // XXX Somehow disabling ROSC breaks SWD, perhaps signal integrity issues?
     // unsafe{ pac::ROSC.ctrl().modify(|s| s.set_enable(pac::rosc::vals::Enable::DISABLE)) };
 
-    // Not necessary, but output has a cleaner more understandable linear response
-    // with Schmitt Trigger disabled.
+    // Disabling the Schmitt Trigger gives a clearer correlation between "overshoot"
+    // and measured values.
     unsafe {
         pac::PADS_BANK0
             .gpio(pin_num)
@@ -122,35 +135,48 @@ where
     // Long enough to drive the capacitor high
     cortex_m::asm::delay(10000);
     pin.set_as_input();
-    pin.set_pull(Pull::Down);
-    syst.clear_current();
-    let t = Timer::new(syst);
-    // Get it near the threshold to begin.
-    while pin.is_high() {}
-    let del = t.done()?;
-    info!("initial pulldown del is {}", del);
+    let del = critical_section::with(|_cs| {
+        pin.set_pull(Pull::Down);
+        let t = SyTi::new(syst);
+        // Get it near the threshold to begin.
+        while pin.is_high() {}
+        t.done()
+    })?;
+    info!("Initial pulldown del is {}", del);
+
+    if del < MIN_CAPACITOR_DEL {
+        error!("Capacitor seems small or missing?");
+        return Err(())
+    }
 
     // The main loop
     let mut overshoot = 1u32;
+
+    // After warmup we sample twice at each "overshoot" value.
+    // One sample is returned as random output, the other is mixed
+    // in to the overshoot value.
     let n_iter = WARMUP + 2 * n_out;
+
     for i in 0..n_iter {
         // Pull up until hit logical high
-        pin.set_pull(Pull::Up);
-        while pin.is_low() {}
-        // Keep pulling up for `overshoot` cycles
-        cortex_m::asm::delay(overshoot);
+        let meas = critical_section::with(|_cs| {
+            pin.set_pull(Pull::Up);
+            while pin.is_low() {}
+            // Keep pulling up for `overshoot` cycles
+            cortex_m::asm::delay(overshoot);
 
-        // Pull down, time how long to reach threshold
-        pin.set_pull(Pull::Down);
-        let t = Timer::new(syst);
-        while pin.is_high() {}
-        let meas = t.done()?;
+            // Pull down, time how long to reach threshold
+            pin.set_pull(Pull::Down);
+            let t = SyTi::new(syst);
+            while pin.is_high() {}
+            t.done()
+        })?;
 
-        if i > WARMUP && (i - WARMUP) % 2 == 1 {
-            // produce output, don't use internally
+        if i > WARMUP && (i - WARMUP) % 2 == 0 {
+            // real output
             f(meas)
         } else {
-            // don't produce output, mix measured in
+            // don't produce output, mix measured sample in
             overshoot = overshoot * 2 + meas;
             // modulo to sensible range
             if overshoot > HIGH_OVER {

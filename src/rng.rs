@@ -1,7 +1,8 @@
-#[cfg(feature = "log")]
-use log::error;
+#[cfg(not(feature = "defmt"))]
+use log::{debug, info, warn, error};
 
-use defmt::{debug, info, warn, panic};
+#[cfg(feature = "defmt")]
+use defmt::{debug, info, warn, panic, error};
 
 use core::cell::RefCell;
 use core::num::NonZeroU32;
@@ -62,8 +63,9 @@ pub fn setup<P: Pin>(
 // TODO: have some kind of fast erasure RNG instead?
 struct CapRng(ChaCha20Rng);
 
-
 impl CapRng {
+    const SEED_SAMPLES: usize = 1024;
+
     /// Call this at early startup. If noisy interrupts or time slicing is happening the caller
     /// should disable interrupts.
     /// `syst` will be modified.
@@ -73,7 +75,7 @@ impl CapRng {
         syst: &mut SYST,
     ) -> Result<Self, getrandom::Error> {
         let mut h = Sha256::new();
-        crate::cap::jumble(pin, pin_num, syst, 256 * 4, |v| h.update(v.to_be_bytes())).map_err(
+        crate::cap::cap_rand(pin, pin_num, syst, Self::SEED_SAMPLES, |v| h.update(v.to_be_bytes())).map_err(
             |_| {
                 warn!("Random generation failed");
                 error()

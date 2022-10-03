@@ -5,25 +5,34 @@ edition = "2021"
 
 [dependencies]
 
-cortex-m = { version = "0.7", features = ["critical-section-single-core"]}
+cortex-m = "0.7"
+embassy-rp = { version = "0.1.0",  features = ["defmt", "unstable-traits", "nightly", "unstable-pac", "time-driver"] }
+embassy-time = { version = "0.1.0", features = ["defmt", "defmt-timestamp-uptime"] }
+defmt = { version = "0.3", optional = true }
 
-getrandom = { version = "0.2", default-features = false, features = ["custom"]}
+getrandom = { version = "0.2", default-features = false }
 critical-section = "1.1"
 sha2 = { version = "0.10", default-features = false }
-rand_chacha = "0.3"
+rand_chacha = { version = "0.3", default-features = false }
 
-log = { version = "0.4", optional = true }
-
-embassy-rp = { version = "0.1.0",  features = ["defmt", "unstable-traits", "nightly", "unstable-pac"] }
-
-# TODO: make a feature
-defmt = "0.3"
-defmt-rtt = "0.3"
+log = { version = "0.4", default-features = false }
 
 [dev-dependencies]
+cortex-m-rt = "0.7.0"
+cortex-m = { version = "0.7", features = ["critical-section-single-core"]}
+embassy-executor = { version = "0.1.0", features = ["defmt", "integrated-timers"] }
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+defmt-rtt = { version = "0.3" }
+getrandom = { version = "0.2", default-features = false, features = ["custom"]}
 
 [features]
-default = [ "log" ]
+defmt = [ "dep:defmt" ]
+
+[profile.release]
+debug = 2
 
 [patch.crates-io]
+# embassy isn't released to crates.io yet
 embassy-rp = { git = "https://github.com/embassy-rs/embassy", rev = "1d6f5493e7764767eb592e0b90d6b07d46b100ca" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy", rev = "1d6f5493e7764767eb592e0b90d6b07d46b100ca" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "1d6f5493e7764767eb592e0b90d6b07d46b100ca" }
