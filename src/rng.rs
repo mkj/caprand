@@ -75,7 +75,12 @@ impl CapRng {
         syst: &mut SYST,
     ) -> Result<Self, getrandom::Error> {
         let mut h = Sha256::new();
-        crate::cap::cap_rand(pin, pin_num, syst, Self::SEED_SAMPLES, |v| h.update(v.to_be_bytes())).map_err(
+        let mut count = 0;
+        crate::cap::cap_rand(pin, pin_num, syst, |v, _over| {
+            h.update(v.to_be_bytes());
+            count += 1;
+            count < Self::SEED_SAMPLES
+        }).map_err(
             |_| {
                 warn!("Random generation failed");
                 error()
@@ -85,3 +90,7 @@ impl CapRng {
         Ok(Self(ChaCha20Rng::from_seed(seed)))
     }
 }
+
+
+// tests:
+// - f() is called the correct number of times, be exhaustive?
