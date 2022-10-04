@@ -136,41 +136,36 @@ fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> 
     let gpio_in = pac::SIO.gpio_in(0).ptr();
     let mask = 1u32 << pin_num;
     let t = SyTi::new(syst);
-    let dbg: u32;
     let x0: u32;
     let x1: u32;
     let x2: u32;
     let x3: u32;
     let x4: u32;
-    let x5: u32;
-    let x6: u32;
-    let x7: u32;
-    let dbg: u32;
 
-
+    // for testing with logic analyzer
     // let so = pac::SIO.gpio_out(0);
     // let mut out = Flex::new(unsafe { embassy_rp::peripherals::PIN_16::steal() });
-    // out.set_high();
     // out.set_as_output();
+    // so.value_clr().write_value(1<<16);
 
     unsafe {
         asm!(
-            "222:",
+            // save
             "mov r10, r7",
-            // read gpio_in register, 1 cycle
+
+            "222:",
+            // read gpio_in register, 5 cycles
             "ldr {x0}, [{gpio_in}]",
             "ldr {x1}, [{gpio_in}]",
             "ldr {x2}, [{gpio_in}]",
             "ldr {x3}, [{gpio_in}]",
             "ldr {x4}, [{gpio_in}]",
-            "ldr {x4}, [{gpio_in}]",
-
-            // Only test the most recent sample. there's a slight chance
-            // of missing a glitchy short trigger in an earlier sample,
-            // but we'll catch up later if we miss it.
+            // only test the most recent sample. 1 cycle
             "ands {x4}, {mask}",
             // Loop if bit set, 2 cycles
             "bne 222b",
+
+            // restore
             "mov r7, r10",
 
             mask = in(reg) mask,
@@ -186,15 +181,6 @@ fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> 
     }
 
     let tick = t.done()?;
-    // unsafe {
-    //     so.value_clr().write_value(1<<16);
-    //     so.value_set().write_value(1<<16);
-    //     so.value_clr().write_value(1<<16);
-    //     // out.set_low();
-    //     // out.set_high();
-    //     // out.set_low();
-    // }
-
     let pos = if x0 & mask == 0 {
         0
     } else if x1 & mask == 0 {
@@ -209,9 +195,8 @@ fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> 
         5
     };
 
-    // TODO: pos=0 output should be discarded
-    // debug!("{} {} {} {} pos {}", x0, x1, x2, x3, pos);
-    Ok((tick + pos, pos != 0))
+    let precise = pos != 0;
+    Ok((tick + pos, precise))
 }
 
 // `f()` is called on each output `u32`.
