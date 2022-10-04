@@ -141,6 +141,7 @@ fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> 
     let x2: u32;
     let x3: u32;
     let x4: u32;
+    let x5: u32;
 
     // for testing with logic analyzer
     // let so = pac::SIO.gpio_out(0);
@@ -154,21 +155,23 @@ fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> 
             "mov r10, r7",
 
             "222:",
-            // read gpio_in register, 5 cycles
+            // read gpio_in register, 6 cycles
             "ldr {x0}, [{gpio_in}]",
             "ldr {x1}, [{gpio_in}]",
             "ldr {x2}, [{gpio_in}]",
             "ldr {x3}, [{gpio_in}]",
             "ldr {x4}, [{gpio_in}]",
+            "ldr r7, [{gpio_in}]",
             // only test the most recent sample. 1 cycle
-            "ands {x4}, {mask}",
+            "ands r7, {mask}",
             // Loop if bit set, 2 cycles
             "bne 222b",
 
+            "mov {mask}, r7",
             // restore
             "mov r7, r10",
 
-            mask = in(reg) mask,
+            mask = inlateout(reg) mask => x5,
             gpio_in = in(reg) gpio_in,
             x0 = out(reg) x0,
             x1 = out(reg) x1,
@@ -191,8 +194,10 @@ fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> 
         3
     } else if x4 & mask == 0 {
         4
-    } else {
+    } else if x5 & mask == 0 {
         5
+    } else {
+        6
     };
 
     let precise = pos != 0;
