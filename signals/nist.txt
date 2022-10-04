@@ -1,0 +1,33 @@
+dust:~/3rd/SP800-90B_EntropyAssessment/cpp ./ea_non_iid ~/own/caprand/signals/l17-num2.bin8 8 
+
+Running non-IID tests...
+
+Running Most Common Value Estimate...
+
+Running Entropic Statistic Estimates (bit strings only)...
+
+Running Tuple Estimates...
+
+Running Predictor Estimates...
+
+H_original: 6.043898
+H_bitstring: 0.475864
+min(H_original, 8 X H_bitstring): 3.806913
+
+---------
+
+dust:~/3rd/SP800-90B_EntropyAssessment/cpp ./ea_non_iid ~/own/caprand/signals/20const.bin8 8 
+
+Running non-IID tests...
+
+Running Most Common Value Estimate...
+
+Running Entropic Statistic Estimates (bit strings only)...
+
+Running Tuple Estimates...
+
+Running Predictor Estimates...
+
+H_original: 2.906981
+H_bitstring: 0.435290
+min(H_original, 8 X H_bitstring): 2.906981

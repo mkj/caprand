@@ -63,7 +63,7 @@ GPIO13
 // on reading.
 const LOW_OVER: u32 = 1000;
 // Power of two for faster modulo
-const HIGH_OVER: u32 = LOW_OVER + 1024;
+const HIGH_OVER: u32 = LOW_OVER + 1023;
 
 // Assume worst case from rp2040 datasheet.
 // 3.3v vdd, 2v logical high voltage, 50kohm pullup, 0.01uF capacitor, 125Mhz clock.
