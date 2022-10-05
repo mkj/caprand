@@ -23,7 +23,8 @@ async fn main(_spawner: Spawner) {
     let mut cp = cortex_m::peripheral::Peripherals::take().unwrap();
 
     let mut gpio = (Flex::new(p.PIN_10), 10);
-    caprand::cap_rand(&mut gpio.0, gpio.1, &mut cp.SYST,
+    // let mut gpio = (Flex::new(p.PIN_22), 22);
+    caprand::noise(&mut gpio.0, gpio.1, &mut cp.SYST,
         |v, overshoot| {
             info!("{} {}", v, overshoot);
             true

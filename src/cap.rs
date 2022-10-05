@@ -61,15 +61,17 @@ GPIO13
 
 // Lower limit is necessary because we don't want to hit the threshold immediately
 // on reading.
-const LOW_OVER: u32 = 1000;
-// Power of two for faster modulo
-const HIGH_OVER: u32 = LOW_OVER + 1023;
+// const LOW_OVER: u32 = 1000;
+// // Power of two for faster modulo
+// const HIGH_OVER: u32 = LOW_OVER + 1023;
+const LOW_OVER: u32 = 0;
+const HIGH_OVER: u32 = 0;
 
 // Assume worst case from rp2040 datasheet.
 // 3.3v vdd, 2v logical high voltage, 50kohm pullup, 0.01uF capacitor, 125Mhz clock.
 // 0.5 * 50e3 * 0.01e-6 * 125e6 = 31250.0
 // Then allow 50% leeway for tolerances.
-const MIN_CAPACITOR_DEL: u32 = 15000;
+const MIN_CAPACITOR_DEL: u32 = 0;
 
 /// Extra iterations prior to taking output, so that `overshoot` is nice and noisy.
 const WARMUP: usize = 16;
@@ -135,20 +137,30 @@ fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> 
     // bank 0 single cycle IO in
     let gpio_in = pac::SIO.gpio_in(0).ptr();
     let mask = 1u32 << pin_num;
+
+    // let so = pac::SIO.gpio_out(0);
+    // let soe = pac::SIO.gpio_out(0);
+    // unsafe {
+    //     so.value_set().write_value(1<<pin_num);
+    //     soe.value_set().write_value(1<<pin_num);
+    // }
+    // cortex_m::asm::delay(10000);
+    // unsafe {
+    //     soe.value_clr().write_value(1<<pin_num);
+    // }
+    // for testing with logic analyzer
+    // let mut out = Flex::new(unsafe { embassy_rp::peripherals::PIN_16::steal() });
+    // out.set_as_output();
+    // so.value_clr().write_value(1<<16);
+
     let t = SyTi::new(syst);
+
     let x0: u32;
     let x1: u32;
     let x2: u32;
     let x3: u32;
     let x4: u32;
     let x5: u32;
-
-    // for testing with logic analyzer
-    // let so = pac::SIO.gpio_out(0);
-    // let mut out = Flex::new(unsafe { embassy_rp::peripherals::PIN_16::steal() });
-    // out.set_as_output();
-    // so.value_clr().write_value(1<<16);
-
     unsafe {
         asm!(
             // save
@@ -161,12 +173,13 @@ fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> 
             "ldr {x2}, [{gpio_in}]",
             "ldr {x3}, [{gpio_in}]",
             "ldr {x4}, [{gpio_in}]",
-            "ldr r7, [{gpio_in}]",
+            "ldr r7,   [{gpio_in}]",
             // only test the most recent sample. 1 cycle
             "ands r7, {mask}",
             // Loop if bit set, 2 cycles
             "bne 222b",
 
+            // return last sample in x5
             "mov {mask}, r7",
             // restore
             "mov r7, r10",
@@ -184,6 +197,7 @@ fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> 
     }
 
     let tick = t.done()?;
+
     let pos = if x0 & mask == 0 {
         0
     } else if x1 & mask == 0 {
@@ -199,13 +213,15 @@ fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> 
     } else {
         6
     };
+    let tick = tick + pos;
+    // let precise = pos != 0;
+    let precise = true;
 
-    let precise = pos != 0;
-    Ok((tick + pos, precise))
+    Ok((tick, precise))
 }
 
 // `f()` is called on each output `u32`.
-pub fn cap_rand<'d, P: Pin, F>(
+pub fn noise<'d, P: Pin, F>(
     pin: &mut Flex<'d, P>,
     pin_num: usize,
     syst: &mut SYST,
@@ -270,11 +286,13 @@ where
 
             // Pull down, time how long to reach threshold
             pin.set_pull(Pull::Down);
+
             // let t = SyTi::new(syst);
             // while pin.is_high() {}
-            // t.done()
-            // time_fall(pin_num, syst)
+            // let r = t.done().map(|t| (t, true));
+
             let r = time_fall_unroll(pin_num, syst);
+
             pin.set_pull(Pull::None);
             r
         })?;

@@ -7,5 +7,5 @@ mod rng;
 mod cap;
 
 pub use rng::{setup, random};
-pub use cap::cap_rand;
+pub use cap::noise;
 
