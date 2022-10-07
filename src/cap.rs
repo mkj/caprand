@@ -7,8 +7,8 @@ use defmt::{error, debug, info, panic};
 use core::arch::asm;
 
 use cortex_m::peripheral::SYST;
-use embassy_rp::gpio::{Flex, Pin, Pull};
-use embassy_rp::pac;
+use embassy_rp::gpio::{Flex, Pin, Pull, AnyPin};
+use embassy_rp::{pac, Peripheral, PeripheralRef};
 
 ///                                         _ still pullup, =up_x
 ///         t3      t4       t1      t2    /
@@ -64,8 +64,8 @@ GPIO13
 // const LOW_OVER: u32 = 1000;
 // // Power of two for faster modulo
 // const HIGH_OVER: u32 = LOW_OVER + 1023;
-const LOW_OVER: u32 = 0;
-const HIGH_OVER: u32 = 0;
+const LOW_OVER: u32 = 100;
+const HIGH_OVER: u32 = 100;
 
 // Assume worst case from rp2040 datasheet.
 // 3.3v vdd, 2v logical high voltage, 50kohm pullup, 0.01uF capacitor, 125Mhz clock.
@@ -103,55 +103,39 @@ impl<'t> SyTi<'t> {
         Ok(self.t1 - t2)
     }
 }
-
-
-/// Equivalent to
-/// `while gpioN.is_high() {}`
-/// but with known 4 cycle loop time (vs 26 cycles for the `while` loop at
-/// at time of writing)
-fn time_fall(pin_num: usize, syst: &mut SYST) -> Result<u32, ()> {
-    // bank 0 single cycle IO in
-    let gpio_in = pac::SIO.gpio_in(0).ptr();
-    let mask = 1u32 << pin_num;
-    let t = SyTi::new(syst);
-    unsafe {
-        asm!(
-            "222:",
-            // read gpio_in register, 1 cycle
-            "ldr {tmp}, [{gpio_in}]",
-            // AND with the desired pin bit, 1 cycle
-            "ands {tmp}, {mask}",
-            // loop if bit set, 2 cycles
-            "bne 222b",
-            tmp = out(reg) _,
-            mask = in(reg) mask,
-            gpio_in = in(reg) gpio_in,
-            options(nostack, readonly),
-        );
-    }
-    t.done()
-}
-
 // Returns (ticks: u32, precise: bool)
-fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> {
+fn time_rise(pin: PeripheralRef<AnyPin>, wait: &mut u32, rpos: &mut u32, syst: &mut SYST) -> Result<(u32, bool), ()> {
+
+    let pin_num = pin.pin();
     // bank 0 single cycle IO in
     let gpio_in = pac::SIO.gpio_in(0).ptr();
     let mask = 1u32 << pin_num;
 
-    // let so = pac::SIO.gpio_out(0);
-    // let soe = pac::SIO.gpio_out(0);
+    let so = pac::SIO.gpio_out(0);
+    let soe = pac::SIO.gpio_oe(0);
+    unsafe {
+        so.value_clr().write_value(1<<pin_num);
+        soe.value_set().write_value(1<<pin_num);
+    }
     // unsafe {
-    //     so.value_set().write_value(1<<pin_num);
-    //     soe.value_set().write_value(1<<pin_num);
+    //     asm!(
+    //         "nop",
+    //     )
     // }
-    // cortex_m::asm::delay(10000);
-    // unsafe {
-    //     soe.value_clr().write_value(1<<pin_num);
-    // }
+    // cortex_m::asm::delay(200);
+    cortex_m::asm::delay(1000);
+    unsafe {
+        soe.value_clr().write_value(1<<pin_num);
+    }
+
     // for testing with logic analyzer
     // let mut out = Flex::new(unsafe { embassy_rp::peripherals::PIN_16::steal() });
     // out.set_as_output();
     // so.value_clr().write_value(1<<16);
+
+    // pin.set_pull(Pull::Down);
+    // cortex_m::asm::delay(900);
+    // pin.set_pull(Pull::None);
 
     let t = SyTi::new(syst);
 
@@ -161,6 +145,8 @@ fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> 
     let x3: u32;
     let x4: u32;
     let x5: u32;
+    let mut gpio = Flex::<AnyPin>::new(pin);
+    gpio.set_pull(Pull::Up);
     unsafe {
         asm!(
             // save
@@ -177,7 +163,7 @@ fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> 
             // only test the most recent sample. 1 cycle
             "ands r7, {mask}",
             // Loop if bit set, 2 cycles
-            "bne 222b",
+            "beq 222b",
 
             // return last sample in x5
             "mov {mask}, r7",
@@ -198,38 +184,45 @@ fn time_fall_unroll(pin_num: usize, syst: &mut SYST) -> Result<(u32, bool), ()> 
 
     let tick = t.done()?;
 
-    let pos = if x0 & mask == 0 {
+    let pos = if x0 & mask != 0 {
         0
-    } else if x1 & mask == 0 {
+    } else if x1 & mask != 0 {
         1
-    } else if x2 & mask == 0 {
+    } else if x2 & mask != 0 {
         2
-    } else if x3 & mask == 0 {
+    } else if x3 & mask != 0 {
         3
-    } else if x4 & mask == 0 {
+    } else if x4 & mask != 0 {
         4
-    } else if x5 & mask == 0 {
+    } else if x5 & mask != 0 {
         5
     } else {
         6
     };
     let tick = tick + pos;
-    // let precise = pos != 0;
-    let precise = true;
+    // first measurement is less precise.
+    let precise = pos != 0;
 
+    if tick > 600 {
+        *wait = wait.saturating_sub(1);
+    } else if tick > 600 {
+        *wait = (*wait+1).max(10000);
+    }
+
+    *rpos = pos;
     Ok((tick, precise))
 }
 
 // `f()` is called on each output `u32`.
-pub fn noise<'d, P: Pin, F>(
-    pin: &mut Flex<'d, P>,
-    pin_num: usize,
+pub fn noise<'d, F>(
+    mut pin: PeripheralRef<AnyPin>,
     syst: &mut SYST,
     mut f: F,
 ) -> Result<(), ()>
 where
     F: FnMut(u32, u32) -> bool,
 {
+    let pin_num = pin.pin() as usize;
     syst.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
     // prescribed sequence for setup
     syst.set_reload(10_000_000 - 1);
@@ -248,20 +241,22 @@ where
             .modify(|s| s.set_schmitt(false))
     };
 
-    // Measure pulldown time from vcc as a sanity check
-    pin.set_as_output();
-    pin.set_high();
-    // Long enough to drive the capacitor high
+    let mut gpio = Flex::<AnyPin>::new(pin.reborrow());
+    // Measure pullup time from 0 as a sanity check
+    gpio.set_as_output();
+    gpio.set_low();
+    // Long enough to drive the capacitor low
     cortex_m::asm::delay(10000);
-    pin.set_as_input();
+    gpio.set_as_input();
     let del = critical_section::with(|_cs| {
-        pin.set_pull(Pull::Down);
+        gpio.set_pull(Pull::Up);
         let t = SyTi::new(syst);
         // Get it near the threshold to begin.
-        while pin.is_high() {}
+        while gpio.is_low() {}
         t.done()
     })?;
-    info!("Initial pulldown del is {}", del);
+    drop(gpio);
+    // info!("Initial pullup del is {}", del);
 
     if del < MIN_CAPACITOR_DEL {
         error!("Capacitor seems small or missing?");
@@ -272,6 +267,8 @@ where
     let mut overshoot = 1u32;
 
     let mut warming = WARMUP;
+    let mut wait = 0;
+    let mut pos = 0;
 
     // After warmup we sample twice at each "overshoot" value.
     // One sample is returned as random output, the other is mixed
@@ -279,28 +276,37 @@ where
     for (i, _) in core::iter::repeat(()).enumerate() {
 
         let (meas, precise) = critical_section::with(|_cs| {
-            pin.set_pull(Pull::Up);
-            while pin.is_low() {}
-            // Keep pulling up for `overshoot` cycles
-            cortex_m::asm::delay(overshoot);
+            // pin.set_pull(Pull::Down);
+            // // let t = SyTi::new(syst);
+            // while pin.is_high() {}
+            // // let ticks = t.done()?;
+            // // Keep pulling down for `overshoot` cycles
+            // cortex_m::asm::delay(overshoot);
 
-            // Pull down, time how long to reach threshold
-            pin.set_pull(Pull::Down);
+            // // Pull up, time how long to reach threshold
+            // pin.set_pull(Pull::None);
+            // debug!("pulldown {}", ticks);
 
             // let t = SyTi::new(syst);
             // while pin.is_high() {}
             // let r = t.done().map(|t| (t, true));
 
-            let r = time_fall_unroll(pin_num, syst);
+            let (r, precise) = time_rise(pin.reborrow(), &mut wait, &mut pos, syst)?;
 
-            pin.set_pull(Pull::None);
-            r
+            let mut gpio = Flex::<AnyPin>::new(pin.reborrow());
+            gpio.set_pull(Pull::None);
+
+            // if (r > )
+
+
+            Ok((r, precise))
         })?;
 
         if i % 2 == 0 {
             // real output
-            if precise && warming == 0 {
-                if !f(meas, overshoot) {
+            // if precise && warming == 0 {
+            if warming == 0 {
+                if !f(meas, pos) {
                     // no more output wanted
                     break
                 }

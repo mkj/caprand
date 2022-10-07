@@ -13,9 +13,11 @@ use rand_chacha::ChaCha20Rng;
 use sha2::{Digest, Sha256};
 
 use cortex_m::peripheral::SYST;
-use embassy_rp::gpio::{Flex, Pin};
+use embassy_rp::gpio::{Flex, Pin, Pull, AnyPin};
+use embassy_rp::{pac, Peripheral, PeripheralRef};
 
 use rand_chacha::rand_core::{RngCore, SeedableRng};
+
 
 // arbitrary constant
 pub const CAPRAND_ERR: u32 = getrandom::Error::CUSTOM_START + 510132368;
@@ -45,12 +47,11 @@ pub fn random(buf: &mut [u8]) -> Result<(), getrandom::Error> {
 /// Call this at early startup. If noisy interrupts or time slicing is happening the caller
 /// should disable interrupts.
 /// `syst` will be modified.
-pub fn setup<P: Pin>(
-    pin: &mut Flex<P>,
-    pin_num: usize,
+pub fn setup(
+    pin: PeripheralRef<AnyPin>,
     syst: &mut SYST,
 ) -> Result<(), getrandom::Error> {
-    let r = CapRng::new(pin, pin_num, syst)?;
+    let r = CapRng::new(pin, syst)?;
 
     critical_section::with(|cs| {
         let mut rng = RNG.borrow_ref_mut(cs);
@@ -64,19 +65,18 @@ pub fn setup<P: Pin>(
 struct CapRng(ChaCha20Rng);
 
 impl CapRng {
-    const SEED_SAMPLES: usize = 1024;
+    // const SEED_SAMPLES: usize = 1024;
+    const SEED_SAMPLES: usize = 50000;
 
     /// Call this at early startup. If noisy interrupts or time slicing is happening the caller
     /// should disable interrupts.
     /// `syst` will be modified.
-    fn new<P: Pin>(
-        pin: &mut Flex<P>,
-        pin_num: usize,
+    fn new(pin: PeripheralRef<AnyPin>,
         syst: &mut SYST,
     ) -> Result<Self, getrandom::Error> {
         let mut h = Sha256::new();
         let mut count = 0;
-        crate::cap::noise(pin, pin_num, syst, |v, _over| {
+        crate::cap::noise(pin, syst, |v, _over| {
             h.update(v.to_be_bytes());
             count += 1;
             count < Self::SEED_SAMPLES

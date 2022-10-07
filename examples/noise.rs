@@ -14,7 +14,8 @@ use defmt::{debug, info, warn, panic, error};
 #[cfg(feature = "defmt")]
 use {defmt_rtt as _, panic_probe as _};
 
-use embassy_rp::gpio::Flex;
+use embassy_rp::gpio::{Flex, AnyPin, Pin};
+use embassy_rp::Peripheral;
 use embassy_executor::Spawner;
 
 #[embassy_executor::main]
@@ -22,11 +23,102 @@ async fn main(_spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
     let mut cp = cortex_m::peripheral::Peripherals::take().unwrap();
 
-    let mut gpio = (Flex::new(p.PIN_10), 10);
-    // let mut gpio = (Flex::new(p.PIN_22), 22);
-    caprand::noise(&mut gpio.0, gpio.1, &mut cp.SYST,
-        |v, overshoot| {
-            info!("{} {}", v, overshoot);
-            true
-    }).unwrap();
+    // 0.1uF
+    // let mut gpio = (Flex::new(p.PIN_6), 6);
+    // 0.01uF ?
+    // let mut gpio = (Flex::new(p.PIN_10), 10);
+    // nothing
+    // let mut gpio = Flex::new(p.PIN_22);
+    // nothing, adc pin
+    // let mut gpio = (Flex::new(p.PIN_28), 28);
+
+    // let mut gpio = (Flex::new(p.PIN_15), 15);
+
+    // // wifi sd_clk, or led for non-w
+    // let mut gpio = (Flex::new(p.PIN_29), 29);
+    // // check wifi is off.
+    // let mut gpio23 = Flex::new(p.PIN_23);
+    // assert!(gpio23.is_low());
+    // // wifi cs high
+    // let mut gpio25 = Flex::new(p.PIN_25);
+    // gpio25.set_low();
+    // gpio25.set_as_output();
+
+    // let mut gpio = Flex::new(p.PIN_15);
+    // let mut gpio = Flex::new(p.PIN_20);
+    // let mut gpio = p.PIN_20.into();
+
+    let mut hist = [0u32; 200];
+    let mut n = 0;
+
+    let PRINT = 50000;
+    // let PRINT = 50;
+
+    let mut gpios = [
+        p.PIN_6.degrade().into_ref(),
+        p.PIN_10.degrade().into_ref(),
+        p.PIN_13.degrade().into_ref(),
+        p.PIN_22.degrade().into_ref(),
+        // p.PIN_23.degrade().into_ref(),
+        // p.PIN_24.degrade().into_ref(),
+        p.PIN_25.degrade().into_ref(),
+    ];
+
+    // let mut gpios = [
+    //     p.PIN_0.degrade().into_ref(),
+    //     p.PIN_1.degrade().into_ref(),
+    //     p.PIN_2.degrade().into_ref(),
+    //     p.PIN_3.degrade().into_ref(),
+    //     p.PIN_4.degrade().into_ref(),
+    //     p.PIN_5.degrade().into_ref(),
+    //     p.PIN_6.degrade().into_ref(),
+    //     p.PIN_7.degrade().into_ref(),
+    //     p.PIN_8.degrade().into_ref(),
+    //     p.PIN_9.degrade().into_ref(),
+    //     p.PIN_10.degrade().into_ref(),
+    //     p.PIN_11.degrade().into_ref(),
+    //     p.PIN_12.degrade().into_ref(),
+    //     p.PIN_13.degrade().into_ref(),
+    //     p.PIN_14.degrade().into_ref(),
+    //     p.PIN_15.degrade().into_ref(),
+    //     p.PIN_16.degrade().into_ref(),
+    //     p.PIN_17.degrade().into_ref(),
+    //     p.PIN_18.degrade().into_ref(),
+    //     p.PIN_19.degrade().into_ref(),
+    //     p.PIN_20.degrade().into_ref(),
+    //     p.PIN_21.degrade().into_ref(),
+    //     p.PIN_22.degrade().into_ref(),
+    //     // p.PIN_23.degrade().into_ref(),
+    //     // p.PIN_24.degrade().into_ref(),
+    //     p.PIN_25.degrade().into_ref(),
+    //     p.PIN_26.degrade().into_ref(),
+    //     p.PIN_27.degrade().into_ref(),
+    //     p.PIN_28.degrade().into_ref(),
+    //     // p.PIN_29.degrade().into_ref(),
+    // ];
+
+    for gpio in gpios.iter_mut() {
+        let pin = gpio.pin();
+        caprand::noise(gpio.reborrow(), &mut cp.SYST,
+            |v, overshoot| {
+                // info!("{}", v);
+
+                let vu = v as usize;
+                hist[vu.min(hist.len()-1)] += 1;
+                n += 1;
+                if n % PRINT == 0 {
+                    info!("gpio {} iter {}", pin, n);
+                    for (p, h) in hist.iter_mut().enumerate() {
+                        if *h > 0 {
+                            info!("{}: {}", p, h);
+                            *h = 0;
+                        }
+                    }
+                    false
+                } else {
+                    true
+                }
+        }).unwrap();
+    }
+
 }
