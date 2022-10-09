@@ -50,7 +50,7 @@ async fn main(_spawner: Spawner) {
 
     let mut hist = [0u32; 200];
 
-    let PRINT = 20000;
+    let PRINT = 1000000;
     // let PRINT = 50;
 
     // let mut gpios = [
@@ -72,7 +72,7 @@ async fn main(_spawner: Spawner) {
         // p.PIN_3.degrade().into_ref(),
         // p.PIN_4.degrade().into_ref(),
         // p.PIN_5.degrade().into_ref(),
-        p.PIN_6.degrade().into_ref(),
+        // p.PIN_6.degrade().into_ref(),
         // p.PIN_7.degrade().into_ref(),
         // p.PIN_8.degrade().into_ref(),
         // p.PIN_9.degrade().into_ref(),
@@ -82,36 +82,36 @@ async fn main(_spawner: Spawner) {
         // p.PIN_13.degrade().into_ref(),
         // p.PIN_14.degrade().into_ref(),
         // p.PIN_15.degrade().into_ref(),
-        p.PIN_16.degrade().into_ref(),
+        // p.PIN_16.degrade().into_ref(),
         // p.PIN_17.degrade().into_ref(),
         // p.PIN_18.degrade().into_ref(),
         // p.PIN_19.degrade().into_ref(),
         // p.PIN_20.degrade().into_ref(),
         // p.PIN_21.degrade().into_ref(),
-        p.PIN_22.degrade().into_ref(),
+        // p.PIN_22.degrade().into_ref(),
         // p.PIN_23.degrade().into_ref(),
         // p.PIN_24.degrade().into_ref(),
         // wl_cs, gate of vsys adc mosfet
-        // p.PIN_25.degrade().into_ref(),
+        p.PIN_25.degrade().into_ref(),
         // p.PIN_26.degrade().into_ref(),
         // p.PIN_27.degrade().into_ref(),
         // p.PIN_28.degrade().into_ref(),
         // p.PIN_29.degrade().into_ref(),
     ];
 
-    info!("gpio,delay,time,n");
+    info!("gpio,delay,time");
     for gpio in gpios.iter_mut() {
-        for low_delay in 0..1{
+        let low_delay = 69;
+        // for low_delay in 0..1{
             let pin = gpio.pin();
             let mut n = 0;
             caprand::noise(gpio.reborrow(), low_delay,
-                &mut cp.SYST,
-                |v, overshoot| {
-                    info!("{},{},{},{}", pin, low_delay, v, n);
+                |v| {
+                    info!("{},{},{}", pin, low_delay, v);
                     n += 1;
                     n < PRINT
             }).unwrap();
-        }
+        // }
     }
     cortex_m::asm::bkpt()
 }

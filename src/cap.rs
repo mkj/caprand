@@ -107,41 +107,33 @@ impl<'t> SyTi<'t> {
         Ok(self.t1 - t2)
     }
 }
-// Returns (ticks: u32, pos: u8)
-// `pos == 0` are less precise than other results
-fn time_rise(pin: PeripheralRef<AnyPin>, low_cycles: u32, syst: &mut SYST) -> Result<(u32, u8), ()> {
+
+/// Pulls a pin low for an exact number of cycles.
+/// Call with interrupts disabled if it's important.
+fn exact_low(pin: PeripheralRef<AnyPin>, low_cycles: u32) {
     let pin_num = pin.pin() as usize;
     let mask = 1u32 << pin_num;
-
-    unsafe {
-        pac::PADS_BANK0
-            .gpio(pin_num)
-            .modify(|s| {
-                // Pullup
-                s.set_pue(true);
-            });
-    };
-
-    // bank 0 single cycle IO in
-    let gpio_in = pac::SIO.gpio_in(0).ptr();
+    // pin low
     let so = pac::SIO.gpio_out(0);
-    let soe = pac::SIO.gpio_oe(0);
     unsafe {
         so.value_clr().write_value(1 << pin_num);
     }
 
+    // output enable set/clear registers
+    let soe = pac::SIO.gpio_oe(0);
     let soe_set = soe.value_set().ptr();
     let soe_clr = soe.value_clr().ptr();
 
+    // We set output enable, wait a number of cycles, then clear output enable.
+    // Modulo 3 because the subs/bne loops take 3 cycles.
     match (low_cycles, low_cycles % 3) {
         (0, _) => {
-            panic!("Don't use this");
             // no pull low
         },
         (1, _) => unsafe {
             asm!(
+                // one cycle for set
                 "str {mask}, [{soe_set}]",
-                // low for 1 cycle
                 "str {mask}, [{soe_clr}]",
 
                 mask = in(reg) mask,
@@ -152,8 +144,9 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_cycles: u32, syst: &mut SYST) -> Re
         },
         (2, _) => unsafe {
             asm!(
+                // one cycle for set
                 "str {mask}, [{soe_set}]",
-                // low for 2 cycles
+                // one cycle
                 "nop",
                 "str {mask}, [{soe_clr}]",
 
@@ -166,13 +159,14 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_cycles: u32, syst: &mut SYST) -> Re
         (_, 0) => unsafe {
             // min low time of 3
             asm!(
+                // one cycle for set
                 "str {mask}, [{soe_set}]",
                 "000:",
                 // one cycle
                 "subs {d}, 3",
                 // two cycles bne taken
-                "bne 000b",
                 // one cycle for bne not taken
+                "bne 000b",
                 "str {mask}, [{soe_clr}]",
 
                 mask = in(reg) mask,
@@ -185,6 +179,7 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_cycles: u32, syst: &mut SYST) -> Re
         (_, 1) => unsafe {
             // min low time of 4
             asm!(
+                // one cycle for set
                 "str {mask}, [{soe_set}]",
                 // one cycle
                 "subs {d}, 1",
@@ -192,8 +187,8 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_cycles: u32, syst: &mut SYST) -> Re
                 // one cycle
                 "subs {d}, 3",
                 // two cycles bne taken
-                "bne 000b",
                 // one cycle for bne not taken
+                "bne 000b",
                 "str {mask}, [{soe_clr}]",
 
                 mask = in(reg) mask,
@@ -206,6 +201,7 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_cycles: u32, syst: &mut SYST) -> Re
         (_, 2) => unsafe {
             // min low time of 5
             asm!(
+                // one cycle for set
                 "str {mask}, [{soe_set}]",
                 // one cycle
                 "subs {d}, 1",
@@ -215,8 +211,8 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_cycles: u32, syst: &mut SYST) -> Re
                 // one cycle
                 "subs {d}, 3",
                 // two cycles bne taken
-                "bne 000b",
                 // one cycle for bne not taken
+                "bne 000b",
                 "str {mask}, [{soe_clr}]",
 
                 mask = in(reg) mask,
@@ -227,41 +223,26 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_cycles: u32, syst: &mut SYST) -> Re
                 );
         },
         // `match` doesn't understand modulo
-        _ => unreachable!()
+        (_, 3..) => unreachable!()
     }
+}
 
-    let mut t = SyTi::new(syst);
-    // unsafe {
-    //     soe.value_set().write_value(1 << pin_num);
-    // }
-    // // // unsafe {
-    // // //     asm!(
-    // // //         "nop",
-    // // //     )
-    // // // }
-    // // cortex_m::asm::delay(20);
-    // // cortex_m::asm::delay(1000);
-    // unsafe {
-    //     soe.value_clr().write_value(1 << pin_num);
-    // }
+fn time_rise(pin: PeripheralRef<AnyPin>, low_cycles: u32) -> Result<u32, ()> {
+    let pin_num = pin.pin() as usize;
+    let mask = 1u32 << pin_num;
 
-    // for testing with logic analyzer
-    // let mut out = Flex::new(unsafe { embassy_rp::peripherals::PIN_16::steal() });
-    // out.set_as_output();
-    // so.value_clr().write_value(1<<16);
+    // Pull low for a number of cycles
+    exact_low(pin, low_cycles);
 
-    // pin.set_pull(Pull::Down);
-    // cortex_m::asm::delay(900);
-    // pin.set_pull(Pull::None);
-
-
+    // bank 0 single cycle IO in
+    let gpio_in = pac::SIO.gpio_in(0).ptr();
     let x0: u32;
     let x1: u32;
     let x2: u32;
     let x3: u32;
     let x4: u32;
     let x5: u32;
-
+    // Time how long it takes to pull up
     unsafe {
         asm!(
             // save
@@ -297,14 +278,7 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_cycles: u32, syst: &mut SYST) -> Re
         );
     }
 
-    let tick = t.done()?;
-
-    let result = (x0 & mask) << 0
-        | (x1 & mask) << 1
-        | (x2 & mask) << 2
-        | (x3 & mask) << 3
-        | (x4 & mask) << 4
-        | (x5 & mask) << 5;
+    // let tick = t.done()?;
 
     // let pos = if x0 & mask != 0 {
     //     0
@@ -325,133 +299,170 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_cycles: u32, syst: &mut SYST) -> Re
     // // first measurement is less precise.
     // let precise = pos != 0;
 
-    unsafe {
-        // Turn off pullup when not used
-        pac::PADS_BANK0
-            .gpio(pin_num)
-            .modify(|s| {
-                s.set_pue(false);
-            });
-    };
+    // Combine all measurements in a constant-time way
+    // TODO: Check it really is constant time - seems like it should be.
+    let result = (x0 & mask)
+        | (x1 & mask).rotate_left(1)
+        | (x2 & mask).rotate_left(2)
+        | (x3 & mask).rotate_left(3)
+        | (x4 & mask).rotate_left(4)
+        | (x5 & mask).rotate_left(5);
+    let result = result >> pin_num;
 
-    Ok((tick, pos as u8))
+    Ok(result)
 }
 
 // `f()` is called on each output `u32`.
 pub fn noise<'d, F>(
     mut pin: PeripheralRef<AnyPin>,
     low_cycles: u32,
-    syst: &mut SYST,
     mut f: F,
 ) -> Result<(), ()>
 where
-    F: FnMut(u32, u32) -> bool,
+    F: FnMut(u32) -> bool,
 {
     let pin_num = pin.pin() as usize;
-    syst.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
-    // prescribed sequence for setup
-    syst.set_reload(10_000_000 - 1);
-    syst.clear_current();
-    syst.enable_counter();
 
     // Seemed to reduce noise (for investigating thermal noise vs other interference).
     // XXX Somehow disabling ROSC breaks SWD, perhaps signal integrity issues?
     // unsafe{ pac::ROSC.ctrl().modify(|s| s.set_enable(pac::rosc::vals::Enable::DISABLE)) };
 
-
     let mut gpio = Flex::<AnyPin>::new(pin.reborrow());
-    // Measure pullup time from 0 as a sanity check
-    gpio.set_as_output();
-    gpio.set_low();
-    // Long enough to drive the capacitor low
-    cortex_m::asm::delay(10000);
-    gpio.set_as_input();
-    // let del = critical_section::with(|_cs| {
-    //     gpio.set_pull(Pull::Up);
-    //     let t = SyTi::new(syst);
-    //     // Get it near the threshold to begin.
-    //     while gpio.is_low() {}
-    //     t.done()
-    // })?;
+    // // Measure pullup time from 0 as a sanity check
+    // gpio.set_as_output();
+    // gpio.set_low();
+    // // Long enough to drive the capacitor low
+    // cortex_m::asm::delay(10000);
+    // gpio.set_as_input();
+    // // let del = critical_section::with(|_cs| {
+    // //     gpio.set_pull(Pull::Up);
+    // //     let t = SyTi::new(syst);
+    // //     // Get it near the threshold to begin.
+    // //     while gpio.is_low() {}
+    // //     t.done()
+    // // })?;
     drop(gpio);
-    // info!("Initial pullup del is {}", del);
+    // // info!("Initial pullup del is {}", del);
 
-    // if del < MIN_CAPACITOR_DEL {
-    //     error!("Capacitor seems small or missing?");
-    //     return Err(())
-    // }
+    // // if del < MIN_CAPACITOR_DEL {
+    // //     error!("Capacitor seems small or missing?");
+    // //     return Err(())
+    // // }
 
-
-    // The main loop
-    let mut overshoot = 1u32;
 
     let mut warming = WARMUP;
-    let mut pos = 0;
 
-    unsafe {
-        pac::PADS_BANK0
-            .gpio(pin_num)
-            .modify(|s| {
-                // // Disabling the Schmitt Trigger gives a clearer correlation between "overshoot"
-                // // and measured values.
-                // s.set_schmitt(false);
-                // Input enable
-                s.set_ie(true);
-            });
+    let _p = PinSetup::new(pin_num as u8);
 
-        pac::SYSCFG
-            .proc_in_sync_bypass()
-            .modify(|s| {
-                let val = s.proc_in_sync_bypass();
-                s.set_proc_in_sync_bypass(val | 1 << pin_num);
-            });
-
-        // Use SIO
-        pac::IO_BANK0
-            .gpio(pin_num)
-            .ctrl()
-            .modify(|s| {
-                s.set_funcsel(pac::io::vals::Gpio0ctrlFuncsel::SIO_0.0)
-            });
-    }
-
-    // After warmup we sample twice at each "overshoot" value.
-    // One sample is returned as random output, the other is mixed
-    // in to the overshoot value.
     for (i, _) in core::iter::repeat(()).enumerate() {
+        let r = critical_section::with(|_cs| {
 
-        let (meas, precise) = critical_section::with(|_cs| {
-
-            let (r, pos) = time_rise(pin.reborrow(), low_cycles, syst)?;
-            let precise = pos == 0;
-
-            // let mut gpio = Flex::<AnyPin>::new(pin.reborrow());
-            // gpio.set_pull(Pull::None);
-
-            // if (r > )
-
-
-            Ok((r, precise))
+            let r = time_rise(pin.reborrow(), low_cycles)?;
+            Ok(r)
         })?;
 
-        if i % 2 == 0 {
-            // real output
-            // if precise && warming == 0 {
-            if warming == 0 {
-                if !f(meas, pos) {
-                    // no more output wanted
-                    break
-                }
-            }
-            warming = warming.saturating_sub(1);
-        } else {
-            // don't produce output, mix measured sample in
-            overshoot = overshoot * 2 + meas;
-            // modulo to sensible range
-            if overshoot > HIGH_OVER {
-                overshoot = LOW_OVER + (overshoot % (HIGH_OVER - LOW_OVER + 1))
+        // real output
+        // if precise && warming == 0 {
+        if warming == 0 {
+            if !f(r) {
+                // no more output wanted
+                break
             }
         }
+        warming = warming.saturating_sub(1);
     }
     Ok(())
+}
+
+pub fn best_low_time(mut pin: PeripheralRef<AnyPin>, max_time: u32) -> Result<u32, ()> {
+    const ITERS: usize = 1000;
+    let mut best = None;
+    for t in 1..=max_time {
+        let mut hist = [0u32; 64];
+        let mut n = 0;
+        noise(pin.reborrow(), t,
+            |v| {
+                hist[v as usize] += 1;
+                n += 1;
+                n < ITERS
+            })?;
+        let hmax = *hist.iter().max().unwrap();
+        // trace!("t {} hmax {}", t, hmax);
+        if let Some((_, best_hmax)) = best {
+            if hmax < best_hmax {
+                best = Some((t, hmax));
+            }
+        } else {
+            best = Some((t, hmax));
+        }
+    }
+    // TODO unwrap
+    Ok(best.unwrap().0)
+}
+
+struct PinSetup(u8);
+
+impl PinSetup {
+    fn new(pin_num: u8) -> Self {
+        unsafe {
+            pac::PADS_BANK0
+                .gpio(pin_num as usize)
+                .modify(|s| {
+                    // // Disabling the Schmitt Trigger gives a clearer correlation between "overshoot"
+                    // // and measured values.
+                    // s.set_schmitt(false);
+                    // Input enable
+                    s.set_ie(true);
+                    // Pullup
+                    s.set_pue(true);
+                    s.set_pde(false);
+                });
+
+            // Use SIO
+            pac::IO_BANK0
+                .gpio(pin_num as usize)
+                .ctrl()
+                .modify(|s| {
+                    s.set_funcsel(pac::io::vals::Gpio0ctrlFuncsel::SIO_0.0)
+                });
+
+            pac::SYSCFG
+                .proc_in_sync_bypass()
+                .modify(|s| {
+                    let val = s.proc_in_sync_bypass();
+                    s.set_proc_in_sync_bypass(val | 1 << pin_num);
+                });
+
+        }
+        PinSetup(pin_num)
+    }
+}
+
+impl Drop for PinSetup {
+    fn drop(&mut self) {
+        let pin_num = self.0;
+        unsafe {
+            pac::PADS_BANK0
+                .gpio(pin_num as usize)
+                .modify(|s| {
+                    // Pullup
+                    s.set_pue(false);
+                });
+
+            pac::SYSCFG
+                .proc_in_sync_bypass()
+                .modify(|s| {
+                    let val = s.proc_in_sync_bypass();
+                    s.set_proc_in_sync_bypass(val & !(1 << pin_num));
+                });
+
+            // Use SIO
+            pac::IO_BANK0
+                .gpio(pin_num as usize)
+                .ctrl()
+                .modify(|s| {
+                    s.set_funcsel(pac::io::vals::Gpio0ctrlFuncsel::NULL.0);
+                });
+        }
+    }
 }

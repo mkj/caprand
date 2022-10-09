@@ -8,5 +8,5 @@ mod cap;
 // mod numpin;
 
 pub use rng::{setup, random};
-pub use cap::noise;
+pub use cap::{noise, best_low_time};
 
