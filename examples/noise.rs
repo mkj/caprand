@@ -49,56 +49,57 @@ async fn main(_spawner: Spawner) {
     // let mut gpio = p.PIN_20.into();
 
     let mut hist = [0u32; 200];
-    let mut n = 0;
 
-    let PRINT = 50000;
+    let PRINT = 1000;
     // let PRINT = 50;
 
+    // let mut gpios = [
+    //     p.PIN_22.degrade().into_ref(),
+    //     p.PIN_6.degrade().into_ref(),
+    //     p.PIN_10.degrade().into_ref(),
+    //     p.PIN_13.degrade().into_ref(),
+    //     // p.PIN_23.degrade().into_ref(),
+    //     // p.PIN_24.degrade().into_ref(),
+    //     p.PIN_25.degrade().into_ref(),
+    // ];
+
     let mut gpios = [
+        // serial
+        // p.PIN_0.degrade().into_ref(),
+        // p.PIN_1.degrade().into_ref(),
+        p.PIN_2.degrade().into_ref(),
+        p.PIN_3.degrade().into_ref(),
+        p.PIN_4.degrade().into_ref(),
+        p.PIN_5.degrade().into_ref(),
         p.PIN_6.degrade().into_ref(),
+        p.PIN_7.degrade().into_ref(),
+        p.PIN_8.degrade().into_ref(),
+        p.PIN_9.degrade().into_ref(),
         p.PIN_10.degrade().into_ref(),
+        p.PIN_11.degrade().into_ref(),
+        p.PIN_12.degrade().into_ref(),
         p.PIN_13.degrade().into_ref(),
+        p.PIN_14.degrade().into_ref(),
+        p.PIN_15.degrade().into_ref(),
+        p.PIN_16.degrade().into_ref(),
+        p.PIN_17.degrade().into_ref(),
+        p.PIN_18.degrade().into_ref(),
+        p.PIN_19.degrade().into_ref(),
+        p.PIN_20.degrade().into_ref(),
+        p.PIN_21.degrade().into_ref(),
         p.PIN_22.degrade().into_ref(),
         // p.PIN_23.degrade().into_ref(),
         // p.PIN_24.degrade().into_ref(),
         p.PIN_25.degrade().into_ref(),
+        p.PIN_26.degrade().into_ref(),
+        p.PIN_27.degrade().into_ref(),
+        p.PIN_28.degrade().into_ref(),
+        // p.PIN_29.degrade().into_ref(),
     ];
-
-    // let mut gpios = [
-    //     p.PIN_0.degrade().into_ref(),
-    //     p.PIN_1.degrade().into_ref(),
-    //     p.PIN_2.degrade().into_ref(),
-    //     p.PIN_3.degrade().into_ref(),
-    //     p.PIN_4.degrade().into_ref(),
-    //     p.PIN_5.degrade().into_ref(),
-    //     p.PIN_6.degrade().into_ref(),
-    //     p.PIN_7.degrade().into_ref(),
-    //     p.PIN_8.degrade().into_ref(),
-    //     p.PIN_9.degrade().into_ref(),
-    //     p.PIN_10.degrade().into_ref(),
-    //     p.PIN_11.degrade().into_ref(),
-    //     p.PIN_12.degrade().into_ref(),
-    //     p.PIN_13.degrade().into_ref(),
-    //     p.PIN_14.degrade().into_ref(),
-    //     p.PIN_15.degrade().into_ref(),
-    //     p.PIN_16.degrade().into_ref(),
-    //     p.PIN_17.degrade().into_ref(),
-    //     p.PIN_18.degrade().into_ref(),
-    //     p.PIN_19.degrade().into_ref(),
-    //     p.PIN_20.degrade().into_ref(),
-    //     p.PIN_21.degrade().into_ref(),
-    //     p.PIN_22.degrade().into_ref(),
-    //     // p.PIN_23.degrade().into_ref(),
-    //     // p.PIN_24.degrade().into_ref(),
-    //     p.PIN_25.degrade().into_ref(),
-    //     p.PIN_26.degrade().into_ref(),
-    //     p.PIN_27.degrade().into_ref(),
-    //     p.PIN_28.degrade().into_ref(),
-    //     // p.PIN_29.degrade().into_ref(),
-    // ];
 
     for gpio in gpios.iter_mut() {
         let pin = gpio.pin();
+        let mut n = 0;
         caprand::noise(gpio.reborrow(), &mut cp.SYST,
             |v, overshoot| {
                 // info!("{}", v);
@@ -114,10 +115,8 @@ async fn main(_spawner: Spawner) {
                             *h = 0;
                         }
                     }
-                    false
-                } else {
-                    true
                 }
+                n < PRINT
         }).unwrap();
     }
 

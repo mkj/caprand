@@ -106,27 +106,36 @@ impl<'t> SyTi<'t> {
 // Returns (ticks: u32, precise: bool)
 fn time_rise(pin: PeripheralRef<AnyPin>, wait: &mut u32, rpos: &mut u32, syst: &mut SYST) -> Result<(u32, bool), ()> {
 
-    let pin_num = pin.pin();
-    // bank 0 single cycle IO in
-    let gpio_in = pac::SIO.gpio_in(0).ptr();
+    let pin_num = pin.pin() as usize;
     let mask = 1u32 << pin_num;
 
+    // bank 0 single cycle IO in
+    let gpio_in = pac::SIO.gpio_in(0).ptr();
     let so = pac::SIO.gpio_out(0);
     let soe = pac::SIO.gpio_oe(0);
     unsafe {
-        so.value_clr().write_value(1<<pin_num);
-        soe.value_set().write_value(1<<pin_num);
+        so.value_clr().write_value(1 << pin_num);
+        soe.value_set().write_value(1 << pin_num);
     }
-    // unsafe {
-    //     asm!(
-    //         "nop",
-    //     )
-    // }
-    // cortex_m::asm::delay(200);
-    cortex_m::asm::delay(1000);
+    // // unsafe {
+    // //     asm!(
+    // //         "nop",
+    // //     )
+    // // }
+    // cortex_m::asm::delay(20);
+    // cortex_m::asm::delay(1000);
     unsafe {
-        soe.value_clr().write_value(1<<pin_num);
+        soe.value_clr().write_value(1 << pin_num);
     }
+
+    unsafe {
+        pac::PADS_BANK0
+            .gpio(pin_num)
+            .modify(|s| {
+                // Pullup
+                s.set_pue(true);
+            });
+    };
 
     // for testing with logic analyzer
     // let mut out = Flex::new(unsafe { embassy_rp::peripherals::PIN_16::steal() });
@@ -145,8 +154,7 @@ fn time_rise(pin: PeripheralRef<AnyPin>, wait: &mut u32, rpos: &mut u32, syst: &
     let x3: u32;
     let x4: u32;
     let x5: u32;
-    let mut gpio = Flex::<AnyPin>::new(pin);
-    gpio.set_pull(Pull::Up);
+
     unsafe {
         asm!(
             // save
@@ -209,6 +217,15 @@ fn time_rise(pin: PeripheralRef<AnyPin>, wait: &mut u32, rpos: &mut u32, syst: &
         *wait = (*wait+1).max(10000);
     }
 
+    unsafe {
+        pac::PADS_BANK0
+            .gpio(pin_num)
+            .modify(|s| {
+                // No pullup
+                s.set_pue(false);
+            });
+    };
+
     *rpos = pos;
     Ok((tick, precise))
 }
@@ -233,13 +250,6 @@ where
     // XXX Somehow disabling ROSC breaks SWD, perhaps signal integrity issues?
     // unsafe{ pac::ROSC.ctrl().modify(|s| s.set_enable(pac::rosc::vals::Enable::DISABLE)) };
 
-    // Disabling the Schmitt Trigger gives a clearer correlation between "overshoot"
-    // and measured values.
-    unsafe {
-        pac::PADS_BANK0
-            .gpio(pin_num)
-            .modify(|s| s.set_schmitt(false))
-    };
 
     let mut gpio = Flex::<AnyPin>::new(pin.reborrow());
     // Measure pullup time from 0 as a sanity check
@@ -256,12 +266,13 @@ where
         t.done()
     })?;
     drop(gpio);
-    // info!("Initial pullup del is {}", del);
+    info!("Initial pullup del is {}", del);
 
     if del < MIN_CAPACITOR_DEL {
         error!("Capacitor seems small or missing?");
         return Err(())
     }
+
 
     // The main loop
     let mut overshoot = 1u32;
@@ -269,6 +280,26 @@ where
     let mut warming = WARMUP;
     let mut wait = 0;
     let mut pos = 0;
+
+    unsafe {
+        pac::PADS_BANK0
+            .gpio(pin_num)
+            .modify(|s| {
+                // Disabling the Schmitt Trigger gives a clearer correlation between "overshoot"
+                // and measured values.
+                s.set_schmitt(false);
+                // Input enable
+                s.set_ie(true);
+            });
+
+        // Use SIO
+        pac::IO_BANK0
+            .gpio(pin_num)
+            .ctrl()
+            .modify(|s| {
+                s.set_funcsel(pac::io::vals::Gpio0ctrlFuncsel::SIO_0.0)
+            });
+    }
 
     // After warmup we sample twice at each "overshoot" value.
     // One sample is returned as random output, the other is mixed
@@ -293,8 +324,8 @@ where
 
             let (r, precise) = time_rise(pin.reborrow(), &mut wait, &mut pos, syst)?;
 
-            let mut gpio = Flex::<AnyPin>::new(pin.reborrow());
-            gpio.set_pull(Pull::None);
+            // let mut gpio = Flex::<AnyPin>::new(pin.reborrow());
+            // gpio.set_pull(Pull::None);
 
             // if (r > )
 
