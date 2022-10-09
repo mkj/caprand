@@ -1,8 +1,8 @@
 #[cfg(not(feature = "defmt"))]
-use log::{debug, info, warn, error};
+use log::{debug, info, warn, error, trace};
 
 #[cfg(feature = "defmt")]
-use defmt::{error, debug, info, panic};
+use defmt::{error, debug, info, panic, trace};
 
 use core::arch::asm;
 
@@ -109,7 +109,7 @@ impl<'t> SyTi<'t> {
 }
 // Returns (ticks: u32, pos: u8)
 // `pos == 0` are less precise than other results
-fn time_rise(pin: PeripheralRef<AnyPin>, low_delay: u32, syst: &mut SYST) -> Result<(u32, u8), ()> {
+fn time_rise(pin: PeripheralRef<AnyPin>, low_cycles: u32, syst: &mut SYST) -> Result<(u32, u8), ()> {
     let pin_num = pin.pin() as usize;
     let mask = 1u32 << pin_num;
 
@@ -132,11 +132,13 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_delay: u32, syst: &mut SYST) -> Res
 
     let soe_set = soe.value_set().ptr();
     let soe_clr = soe.value_clr().ptr();
-    let mut t = SyTi::new(syst);
 
-    // actual low time is low_delay+1 cycles
-    match (low_delay, low_delay % 3) {
-        (0, _) => unsafe {
+    match (low_cycles, low_cycles % 3) {
+        (0, _) => {
+            panic!("Don't use this");
+            // no pull low
+        },
+        (1, _) => unsafe {
             asm!(
                 "str {mask}, [{soe_set}]",
                 // low for 1 cycle
@@ -146,9 +148,9 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_delay: u32, syst: &mut SYST) -> Res
                 soe_set = in(reg) soe_set,
                 soe_clr = in(reg) soe_clr,
                 options(nostack, readonly),
-                )
+                );
         },
-        (1, _) => unsafe {
+        (2, _) => unsafe {
             asm!(
                 "str {mask}, [{soe_set}]",
                 // low for 2 cycles
@@ -159,38 +161,12 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_delay: u32, syst: &mut SYST) -> Res
                 soe_set = in(reg) soe_set,
                 soe_clr = in(reg) soe_clr,
                 options(nostack, readonly),
-                )
-        },
-        (_, 2) => unsafe {
-            // min delay of 2
-            let mut d = low_delay + 1;
-            assert!(d % 3 == 0);
-            asm!(
-                "str {mask}, [{soe_set}]",
-                "000:",
-                // one cycle
-                "subs {d}, 3",
-                // two cycles bne taken
-                "bne 000b",
-                // one cycle for bne not taken
-                "str {mask}, [{soe_clr}]",
-
-                mask = in(reg) mask,
-                soe_set = in(reg) soe_set,
-                soe_clr = in(reg) soe_clr,
-                d = inout(reg) d,
-                options(nostack, readonly),
                 );
-            assert_eq!(d, 0);
         },
         (_, 0) => unsafe {
-            // min delay of 3
-            let mut d = low_delay + 1;
-            assert!(d % 3 == 1);
+            // min low time of 3
             asm!(
                 "str {mask}, [{soe_set}]",
-                // one cycle
-                "subs {d}, 1",
                 "000:",
                 // one cycle
                 "subs {d}, 3",
@@ -202,15 +178,33 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_delay: u32, syst: &mut SYST) -> Res
                 mask = in(reg) mask,
                 soe_set = in(reg) soe_set,
                 soe_clr = in(reg) soe_clr,
-                d = inout(reg) d,
+                d = in(reg) low_cycles,
                 options(nostack, readonly),
                 );
-            assert_eq!(d, 0);
         },
         (_, 1) => unsafe {
-            // min delay of 4
-            let mut d = low_delay + 1;
-            assert!(d % 3 == 2);
+            // min low time of 4
+            asm!(
+                "str {mask}, [{soe_set}]",
+                // one cycle
+                "subs {d}, 1",
+                "000:",
+                // one cycle
+                "subs {d}, 3",
+                // two cycles bne taken
+                "bne 000b",
+                // one cycle for bne not taken
+                "str {mask}, [{soe_clr}]",
+
+                mask = in(reg) mask,
+                soe_set = in(reg) soe_set,
+                soe_clr = in(reg) soe_clr,
+                d = in(reg) low_cycles,
+                options(nostack, readonly),
+                );
+        },
+        (_, 2) => unsafe {
+            // min low time of 5
             asm!(
                 "str {mask}, [{soe_set}]",
                 // one cycle
@@ -228,16 +222,15 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_delay: u32, syst: &mut SYST) -> Res
                 mask = in(reg) mask,
                 soe_set = in(reg) soe_set,
                 soe_clr = in(reg) soe_clr,
-                d = inout(reg) d,
+                d = in(reg) low_cycles,
                 options(nostack, readonly),
                 );
-            assert_eq!(d, 0);
         },
         // `match` doesn't understand modulo
         _ => unreachable!()
     }
 
-    t.reset();
+    let mut t = SyTi::new(syst);
     // unsafe {
     //     soe.value_set().write_value(1 << pin_num);
     // }
@@ -306,30 +299,37 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_delay: u32, syst: &mut SYST) -> Res
 
     let tick = t.done()?;
 
-    let pos = if x0 & mask != 0 {
-        0
-    } else if x1 & mask != 0 {
-        1
-    } else if x2 & mask != 0 {
-        2
-    } else if x3 & mask != 0 {
-        3
-    } else if x4 & mask != 0 {
-        4
-    } else if x5 & mask != 0 {
-        5
-    } else {
-        6
-    };
-    let tick = tick + pos;
-    // first measurement is less precise.
-    let precise = pos != 0;
+    let result = (x0 & mask) << 0
+        | (x1 & mask) << 1
+        | (x2 & mask) << 2
+        | (x3 & mask) << 3
+        | (x4 & mask) << 4
+        | (x5 & mask) << 5;
+
+    // let pos = if x0 & mask != 0 {
+    //     0
+    // } else if x1 & mask != 0 {
+    //     1
+    // } else if x2 & mask != 0 {
+    //     2
+    // } else if x3 & mask != 0 {
+    //     3
+    // } else if x4 & mask != 0 {
+    //     4
+    // } else if x5 & mask != 0 {
+    //     5
+    // } else {
+    //     6
+    // };
+    // let tick = tick + pos;
+    // // first measurement is less precise.
+    // let precise = pos != 0;
 
     unsafe {
+        // Turn off pullup when not used
         pac::PADS_BANK0
             .gpio(pin_num)
             .modify(|s| {
-                // No pullup
                 s.set_pue(false);
             });
     };
@@ -340,7 +340,7 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_delay: u32, syst: &mut SYST) -> Res
 // `f()` is called on each output `u32`.
 pub fn noise<'d, F>(
     mut pin: PeripheralRef<AnyPin>,
-    low_delay: u32,
+    low_cycles: u32,
     syst: &mut SYST,
     mut f: F,
 ) -> Result<(), ()>
@@ -421,22 +421,8 @@ where
     for (i, _) in core::iter::repeat(()).enumerate() {
 
         let (meas, precise) = critical_section::with(|_cs| {
-            // pin.set_pull(Pull::Down);
-            // // let t = SyTi::new(syst);
-            // while pin.is_high() {}
-            // // let ticks = t.done()?;
-            // // Keep pulling down for `overshoot` cycles
-            // cortex_m::asm::delay(overshoot);
 
-            // // Pull up, time how long to reach threshold
-            // pin.set_pull(Pull::None);
-            // debug!("pulldown {}", ticks);
-
-            // let t = SyTi::new(syst);
-            // while pin.is_high() {}
-            // let r = t.done().map(|t| (t, true));
-
-            let (r, pos) = time_rise(pin.reborrow(), 0, syst)?;
+            let (r, pos) = time_rise(pin.reborrow(), low_cycles, syst)?;
             let precise = pos == 0;
 
             // let mut gpio = Flex::<AnyPin>::new(pin.reborrow());
