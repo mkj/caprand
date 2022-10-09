@@ -76,7 +76,7 @@ impl CapRng {
     ) -> Result<Self, getrandom::Error> {
         let mut h = Sha256::new();
         let mut count = 0;
-        crate::cap::noise(pin, syst, |v, _over| {
+        crate::cap::noise(pin, 0, syst, |v, _over| {
             h.update(v.to_be_bytes());
             count += 1;
             count < Self::SEED_SAMPLES
