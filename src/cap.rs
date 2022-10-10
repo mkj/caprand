@@ -307,7 +307,7 @@ fn time_rise(pin: PeripheralRef<AnyPin>, low_cycles: u32) -> Result<u32, ()> {
         | (x3 & mask).rotate_left(3)
         | (x4 & mask).rotate_left(4)
         | (x5 & mask).rotate_left(5);
-    let result = result >> pin_num;
+    let result = result.rotate_right(pin_num as u32);
 
     Ok(result)
 }

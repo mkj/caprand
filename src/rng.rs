@@ -1,8 +1,8 @@
 #[cfg(not(feature = "defmt"))]
-use log::{debug, info, warn, error};
+use log::{debug, info, warn, error, trace};
 
 #[cfg(feature = "defmt")]
-use defmt::{debug, info, warn, panic, error};
+use defmt::{debug, info, warn, panic, error, trace};
 
 use core::cell::RefCell;
 use core::num::NonZeroU32;
@@ -49,9 +49,8 @@ pub fn random(buf: &mut [u8]) -> Result<(), getrandom::Error> {
 /// `syst` will be modified.
 pub fn setup(
     pin: PeripheralRef<AnyPin>,
-    syst: &mut SYST,
 ) -> Result<(), getrandom::Error> {
-    let r = CapRng::new(pin, syst)?;
+    let r = CapRng::new(pin)?;
 
     critical_section::with(|cs| {
         let mut rng = RNG.borrow_ref_mut(cs);
@@ -66,17 +65,19 @@ struct CapRng(ChaCha20Rng);
 
 impl CapRng {
     // const SEED_SAMPLES: usize = 1024;
-    const SEED_SAMPLES: usize = 50000;
+    const SEED_SAMPLES: usize = 1024 * 100;
 
     /// Call this at early startup. If noisy interrupts or time slicing is happening the caller
     /// should disable interrupts.
     /// `syst` will be modified.
-    fn new(pin: PeripheralRef<AnyPin>,
-        syst: &mut SYST,
+    fn new(mut pin: PeripheralRef<AnyPin>,
     ) -> Result<Self, getrandom::Error> {
+        let low_cycles = crate::cap::best_low_time(pin.reborrow(), 100).unwrap();
+        trace!("low_cycles {}", low_cycles);
+
         let mut h = Sha256::new();
         let mut count = 0;
-        crate::cap::noise(pin, 0, |v| {
+        crate::cap::noise(pin, low_cycles, |v| {
             h.update(v.to_be_bytes());
             count += 1;
             count < Self::SEED_SAMPLES

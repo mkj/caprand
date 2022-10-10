@@ -10,7 +10,8 @@ use defmt::{debug, info, warn, panic, error};
 #[cfg(feature = "defmt")]
 use {defmt_rtt as _, panic_probe as _};
 
-use embassy_rp::gpio::Flex;
+use embassy_rp::gpio::Pin;
+use embassy_rp::Peripheral;
 use embassy_executor::Spawner;
 use embassy_time::{Timer, Duration};
 
@@ -19,11 +20,10 @@ use getrandom::register_custom_getrandom;
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
-    let mut cp = cortex_m::peripheral::Peripherals::take().unwrap();
 
-    let mut gpio = (Flex::new(p.PIN_10), 10);
+    let gpio = p.PIN_25.degrade().into_ref();
 
-    caprand::setup(&mut gpio.0, gpio.1, &mut cp.SYST).unwrap();
+    caprand::setup(gpio).unwrap();
 
     register_custom_getrandom!(caprand::random);
 
