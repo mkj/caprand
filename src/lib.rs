@@ -4,9 +4,8 @@
 use log::error;
 
 mod rng;
-mod cap;
+pub mod cap;
 // mod numpin;
 
 pub use rng::{setup, random};
-pub use cap::{noise, best_low_time};
 

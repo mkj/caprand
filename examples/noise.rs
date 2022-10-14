@@ -92,7 +92,7 @@ async fn main(_spawner: Spawner) {
         // p.PIN_23.degrade().into_ref(),
         // p.PIN_24.degrade().into_ref(),
         // wl_cs, gate of vsys adc mosfet
-        p.PIN_25.degrade().into_ref(),
+        p.PIN_25.degrade(),
         // p.PIN_26.degrade().into_ref(),
         // p.PIN_27.degrade().into_ref(),
         // p.PIN_28.degrade().into_ref(),
@@ -105,7 +105,7 @@ async fn main(_spawner: Spawner) {
         // for low_delay in 0..1{
             let pin = gpio.pin();
             let mut n = 0;
-            caprand::noise(gpio.reborrow(), low_delay,
+            caprand::noise(gpio, low_delay,
                 |v| {
                     info!("{},{},{}", pin, low_delay, v);
                     n += 1;

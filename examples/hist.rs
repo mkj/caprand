@@ -18,6 +18,8 @@ use embassy_rp::gpio::{Flex, AnyPin, Pin};
 use embassy_rp::Peripheral;
 use embassy_executor::Spawner;
 
+use caprand::cap;
+
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
@@ -50,7 +52,7 @@ async fn main(_spawner: Spawner) {
 
     let mut hist = [0u32; 200];
 
-    const PRINT: usize = 200000;
+    const PRINT: usize = 20000;
     // let PRINT = 50;
 
     // let mut gpios = [
@@ -63,61 +65,63 @@ async fn main(_spawner: Spawner) {
     //     p.PIN_25.degrade().into_ref(),
     // ];
 
-    let mut gpios = [
-        // serial
-        // p.PIN_0.degrade().into_ref(),
-        // p.PIN_1.degrade().into_ref(),
-
-        p.PIN_2.degrade().into_ref(),
-        p.PIN_3.degrade().into_ref(),
-        p.PIN_4.degrade().into_ref(),
-        p.PIN_5.degrade().into_ref(),
-        p.PIN_6.degrade().into_ref(),
-        p.PIN_7.degrade().into_ref(),
-        p.PIN_8.degrade().into_ref(),
-        p.PIN_9.degrade().into_ref(),
-        p.PIN_10.degrade().into_ref(),
-        p.PIN_11.degrade().into_ref(),
-        p.PIN_12.degrade().into_ref(),
-        p.PIN_13.degrade().into_ref(),
-        p.PIN_14.degrade().into_ref(),
-        p.PIN_15.degrade().into_ref(),
-        p.PIN_16.degrade().into_ref(),
-        p.PIN_17.degrade().into_ref(),
-        p.PIN_18.degrade().into_ref(),
-        p.PIN_19.degrade().into_ref(),
-        p.PIN_20.degrade().into_ref(),
-        p.PIN_21.degrade().into_ref(),
-        p.PIN_22.degrade().into_ref(),
-        // wl_on
-        // p.PIN_23.degrade().into_ref(),
-        // p.PIN_24.degrade().into_ref(),
-        // wl_cs, gate of vsys adc mosfet
-        p.PIN_25.degrade().into_ref(),
-        p.PIN_26.degrade().into_ref(),
-        p.PIN_27.degrade().into_ref(),
-        p.PIN_28.degrade().into_ref(),
-        // p.PIN_29.degrade().into_ref(),
-    ];
     // let mut gpios = [
-    //     p.PIN_25.degrade().into_ref(),
-    // ];
+    //     // serial
+    //     // p.PIN_0.degrade().into_ref(),
+    //     // p.PIN_1.degrade().into_ref(),
 
-    const DUMPS: usize = (1<<17);
+    //     p.PIN_2.degrade(),
+    //     p.PIN_3.degrade(),
+    //     p.PIN_4.degrade(),
+    //     p.PIN_5.degrade(),
+    //     p.PIN_6.degrade(),
+    //     p.PIN_7.degrade(),
+    //     p.PIN_8.degrade(),
+    //     p.PIN_9.degrade(),
+    //     p.PIN_10.degrade(),
+    //     p.PIN_11.degrade(),
+    //     p.PIN_12.degrade(),
+    //     p.PIN_13.degrade(),
+    //     p.PIN_14.degrade(),
+    //     p.PIN_15.degrade(),
+    //     p.PIN_16.degrade(),
+    //     p.PIN_17.degrade(),
+    //     p.PIN_18.degrade(),
+    //     p.PIN_19.degrade(),
+    //     p.PIN_20.degrade(),
+    //     p.PIN_21.degrade(),
+    //     p.PIN_22.degrade(),
+    //     // wl_on
+    //     // p.PIN_23.degrade().into_ref(),
+    //     // p.PIN_24.degrade().into_ref(),
+    //     // wl_cs, gate of vsys adc mosfet
+    //     p.PIN_25.degrade(),
+    //     p.PIN_26.degrade(),
+    //     p.PIN_27.degrade(),
+    //     p.PIN_28.degrade(),
+    //     // p.PIN_29.degrade().into_ref(),
+    // ];
+    let mut gpios = [
+        p.PIN_25.degrade(),
+        // p.PIN_10.degrade(),
+    ];
+
+    const DUMPS: usize = 1<<17;
     let mut dump  = [0u8; DUMPS];
 
-    for gpio in gpios.iter_mut() {
-        // for low_cycles in 1..10 {
-        let low_cycles = caprand::best_low_time(gpio.reborrow(), 100).unwrap();
+    loop {
+        dump.fill(0);
+        for gpio in gpios.iter_mut() {
             let pin = gpio.pin();
+            let low_cycles = cap::best_low_time(gpio, 30..=50u32).unwrap();
             let mut n = 0;
-            caprand::noise(gpio.reborrow(), low_cycles,
+            let mut hist = [0u32; 33];
+            cap::noise(gpio, low_cycles,
                 |v| {
                     // info!("{}", v);
                     dump[n % DUMPS] = v as u8;
-
-                    let vu = v as usize;
-                    hist[vu.min(hist.len()-1)] += 1;
+                    let lb = cap::lsb(v);
+                    hist[lb] += 1;
                     n += 1;
                     if n % PRINT == 0 {
                         info!("gpio {} delay {} iter {}", pin, low_cycles, n);
@@ -130,15 +134,7 @@ async fn main(_spawner: Spawner) {
                     }
                     n < PRINT
             }).unwrap();
-        // }
+        info!("done");
+        }
     }
-
-    info!("done");
-    loop {}
-
-    // for gpio in gpios.iter_mut() {
-    //     let lt = caprand::best_low_time(gpio.reborrow(), 30).unwrap();
-    //     info!("gpio {} lt {}", gpio.pin(), lt);
-    // }
-    cortex_m::asm::bkpt()
 }

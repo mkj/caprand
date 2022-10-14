@@ -48,7 +48,7 @@ pub fn random(buf: &mut [u8]) -> Result<(), getrandom::Error> {
 /// should disable interrupts.
 /// `syst` will be modified.
 pub fn setup(
-    pin: PeripheralRef<AnyPin>,
+    pin: &mut impl Pin,
 ) -> Result<(), getrandom::Error> {
     let r = CapRng::new(pin)?;
 
@@ -70,9 +70,9 @@ impl CapRng {
     /// Call this at early startup. If noisy interrupts or time slicing is happening the caller
     /// should disable interrupts.
     /// `syst` will be modified.
-    fn new(mut pin: PeripheralRef<AnyPin>,
+    fn new(pin: &mut impl Pin,
     ) -> Result<Self, getrandom::Error> {
-        let low_cycles = crate::cap::best_low_time(pin.reborrow(), 100).unwrap();
+        let low_cycles = crate::cap::best_low_time(pin, 0..=100).unwrap();
         trace!("low_cycles {}", low_cycles);
 
         let mut h = Sha256::new();

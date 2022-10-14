@@ -1,0 +1,17 @@
+Experimental capacitor values:
+0.1uF "monolithic" through hole, perhaps from futurlec?
+GPIO6
+0.003717 INFO  initial pulldown del is 346730
+0.003710 INFO  initial pulldown del is 345770
+less than ~13000 overshoot had lots of no-delays
+
+Altronics R8617 • 0.01uF 50V Y5V 0805 SMD Chip Capacitor PK 10
+GPIO10
+0.001292 INFO  initial pulldown del is 43234
+0.001294 INFO  initial pulldown del is 43598
+
+
+Altronics R8629 • 0.047uF 50V X7R 0805 SMD Chip Capacitor PK 10
+GPIO13
+0.002497 INFO  initial pulldown del is 193878
+0.002547 INFO  initial pulldown del is 200170
