@@ -105,7 +105,7 @@ async fn main(_spawner: Spawner) {
         // for low_delay in 0..1{
             let pin = gpio.pin();
             let mut n = 0;
-            caprand::noise(gpio, low_delay,
+            caprand::cap::noise(gpio, low_delay,
                 |v| {
                     info!("{},{},{}", pin, low_delay, v);
                     n += 1;

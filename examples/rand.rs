@@ -21,9 +21,9 @@ use getrandom::register_custom_getrandom;
 async fn main(_spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
-    let gpio = p.PIN_25.degrade().into_ref();
+    let mut gpio = p.PIN_25.degrade();
 
-    caprand::setup(gpio).unwrap();
+    caprand::setup(&mut gpio).unwrap();
 
     register_custom_getrandom!(caprand::random);
 
