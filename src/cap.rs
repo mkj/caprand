@@ -5,12 +5,13 @@ use log::{debug, info, warn, error, trace};
 use defmt::{error, debug, info, panic, trace};
 
 use core::arch::asm;
+use core::mem::replace;
 
 use embassy_rp::gpio::Pin;
 use embassy_rp::pac;
 
 /// Extra iterations prior to taking output.
-const WARMUP: usize = 16;
+const WARMUP: u8 = 16;
 
 /// Drives a pin low for an exact number of cycles.
 /// Call with interrupts disabled if it's important.
@@ -232,6 +233,104 @@ pub fn lsb(v: u32) -> usize {
         }
     }
     return 32
+}
+
+pub struct Noise<'a, P: Pin> {
+    pin: &'a mut P,
+    low_cycles: u32,
+    skip: u8,
+    _setup: PinSetup,
+}
+
+impl<'a, P: Pin> Noise<'a, P> {
+    pub fn new(pin: &'a mut P, low_cycles: u32, skip: u8) -> Result<Self, ()> {
+        let setup = PinSetup::new(pin.pin());
+        let mut s = Self {
+            pin,
+            low_cycles,
+            skip,
+            _setup: setup,
+        };
+
+        for _ in 0..WARMUP {
+            // OK unwrap: iterator never ends
+            s.next().unwrap()?;
+        }
+        Ok(s)
+    }
+
+    pub fn extract(self) -> impl Iterator<Item = Result<bool, ()>> + 'a {
+        // reduce rate to decorrelate
+        let skip = self.skip as usize;
+        let i = self.step_by(skip);
+
+        // von Neumann extractor
+        Pairs { iter: i }
+            .filter_map(|(a,b)| {
+                if let (Ok(a), Ok(b)) = (a,b) {
+                    if a == b {
+                        None
+                    } else {
+                        // trace!("{} {}", a, b);
+                        Some(Ok(a > b))
+                    }
+                } else {
+                    Some(Err(()))
+                }
+            })
+    }
+}
+
+impl<P: Pin> Iterator for Noise<'_, P> {
+    type Item = Result<u8, ()>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let r = critical_section::with(|_cs| {
+            let r = time_rise(self.pin, self.low_cycles)?;
+            Ok(r as u8)
+        });
+        Some(r)
+    }
+}
+
+pub fn bits_to_bytes(i: impl Iterator<Item = Result<bool, ()>>) ->
+        impl Iterator<Item = Result<u8, ()>> {
+    let mut pos = 0;
+    let mut acc = 0;
+    i.filter_map(move |r| {
+        if let Ok(r) = r {
+            // trace!("{}", r as u8);
+            acc |= (r as u8) << pos;
+            pos += 1;
+            if pos == 8 {
+                pos = 0;
+                Some(Ok(replace(&mut acc, 0)))
+            } else {
+                None
+            }
+        } else {
+            Some(Err(()))
+        }
+    })
+}
+
+
+pub struct Pairs<I> {
+    iter: I,
+}
+
+impl<I> Iterator for Pairs<I>
+    where I: Iterator<Item = Result<u8, ()>>
+{
+    type Item = (I::Item, I::Item);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let a = self.iter.next()?;
+        let b = self.iter.next()?;
+        // trace!("{} {}", a, b);
+
+        Some((a,b))
+    }
 }
 
 // `f()` is called on each output `u32`.

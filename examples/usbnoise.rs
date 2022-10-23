@@ -136,58 +136,33 @@ async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, class: &mut CdcAcmClass<'
     // max packet is 64 bytes. we hex encode and add newline, 31*2+1
     const CHUNK: usize = 31;
 
-    let mut buf = [false; CHUNK * 8 * 10];
 
-    let mut a = None;
-    let mut pos = 0u32;
-    let deci = 40u32;
+    let low_cycles = caprand::cap::best_low_time(pin, 10..=90u32).unwrap();
+    trace!("low_cycles = {}", low_cycles);
+    let low_cycles = 54;
+    trace!("low_cycles = {}", low_cycles);
+    let noise = caprand::cap::Noise::new(pin, low_cycles, 5)?
+        .extract();
+    let mut noise = caprand::cap::bits_to_bytes(noise);
+
+
     loop {
+        let mut buf = [0u8; CHUNK];
         let mut b = buf.iter_mut();
-        let low_delay = 30;
-        // XXX should discard first iter or something.
-        caprand::cap::noise(pin, low_delay,
-            |v| {
-                pos = pos.wrapping_add(1);
-                if pos % deci == 0 {
-                    let v = v as u8;
-                    if a.is_none() {
-                        a = Some(v);
-                        true
-                    } else {
-                        let aa = a.take().unwrap();
-                        if aa != v {
-                            if let Some(i) = b.next() {
-                                *i = aa > v;
-                                true
-                            } else {
-                                false
-                            }
-                        } else {
-                            true
-                        }
-                    }
-
-                } else {
-                    // discard
-                    true
-                }
-        }).unwrap();
-
-        for chunk in buf.chunks(CHUNK*8) {
-            // write!(&mut buf, "{:?}", chunk);
-            let mut hex = ['B' as u8; CHUNK*2+1];
-            let mut c = chunk.iter();
-            let mut m = hex.iter_mut();
-            for _ in 0..CHUNK {
-                let mut x = 0u8;
-                for b in 0..8 {
-                    x |= (*c.next().unwrap() as u8) << b;
-                }
-                *m.next().unwrap() = nibble_hex(x >> 4);
-                *m.next().unwrap() = nibble_hex(x & 0xf);
+        loop {
+            match b.next() {
+                Some(b) => *b = noise.next().unwrap()?,
+                None => break
             }
-            *m.next().unwrap() = b'\n';
-            class.write_packet(&hex).await.unwrap();
         }
+
+        let mut hex = ['B' as u8; CHUNK*2+1];
+        let mut m = hex.iter_mut();
+        for c in buf {
+            *m.next().unwrap() = nibble_hex(c >> 4);
+            *m.next().unwrap() = nibble_hex(c & 0xf);
+        }
+        *m.next().unwrap() = b'\n';
+        class.write_packet(&hex).await.unwrap();
     }
 }
