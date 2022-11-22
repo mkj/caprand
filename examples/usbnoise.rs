@@ -87,7 +87,7 @@ async fn main(_spawner: Spawner) {
         loop {
             class.wait_connection().await;
             info!("Connected");
-            let _ = run(&mut p.PIN_25, &mut class).await;
+            let _ = run(&mut p.PIN_10, &mut class).await;
             info!("Disconnected");
         }
     };
@@ -139,9 +139,7 @@ async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, class: &mut CdcAcmClass<'
 
     let low_cycles = caprand::cap::best_low_time(pin, 10..=90u32).unwrap();
     trace!("low_cycles = {}", low_cycles);
-    let low_cycles = 54;
-    trace!("low_cycles = {}", low_cycles);
-    let noise = caprand::cap::Noise::new(pin, low_cycles, 5)?
+    let noise = caprand::cap::Noise::new(pin, low_cycles, 1)?
         .extract();
     let mut noise = caprand::cap::bits_to_bytes(noise);
 
