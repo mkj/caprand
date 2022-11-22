@@ -264,14 +264,17 @@ impl<'a, P: Pin> Noise<'a, P> {
         let skip = self.skip as usize;
         let i = self.step_by(skip);
 
+        // discard first-sample hits
+        let i = i.filter(|x| x.unwrap_or(0) & 1 == 0);
+
         // von Neumann extractor
         Pairs { iter: i }
             .filter_map(|(a,b)| {
                 if let (Ok(a), Ok(b)) = (a,b) {
+                    // trace!("{} {}", a, b);
                     if a == b {
                         None
                     } else {
-                        // trace!("{} {}", a, b);
                         Some(Ok(a > b))
                     }
                 } else {
