@@ -7,9 +7,7 @@ edition = "2021"
 
 cortex-m = "0.7"
 embassy-rp = { version = "0.1.0",  features = ["unstable-traits", "nightly", "unstable-pac", "time-driver"] }
-embassy-time = { version = "0.1.0" }
 defmt = { version = "0.3", optional = true }
-# rtt-target = { version = "0.3", optional = true }
 
 getrandom = { version = "0.2", default-features = false }
 critical-section = "1.1"
@@ -24,6 +22,7 @@ cortex-m = { version = "0.7", features = ["critical-section-single-core"]}
 embassy-executor = { version = "0.1.0", features = ["integrated-timers"] }
 embassy-usb = { version = "0.1.0", features = ["defmt"] }
 embassy-futures = { version = "0.1.0" }
+embassy-time = { version = "0.1.0" }
 panic-probe = { version = "0.3" }
 defmt-rtt = { version = "0.3" }
 getrandom = { version = "0.2", default-features = false, features = ["custom"]}
@@ -35,15 +34,9 @@ defmt = [ "dep:defmt" ]
 debug = 2
 
 [patch.crates-io]
-# embassy isn't released to crates.io yet
-# embassy-rp = { git = "https://github.com/embassy-rs/embassy", rev = "8c42b26fc623f556c865a0f27c7f956b06bedff9" }
-# embassy-executor = { git = "https://github.com/embassy-rs/embassy", rev = "8c42b26fc623f556c865a0f27c7f956b06bedff9" }
-# embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "8c42b26fc623f556c865a0f27c7f956b06bedff9" }
-# embassy-usb = { git = "https://github.com/embassy-rs/embassy", rev = "8c42b26fc623f556c865a0f27c7f956b06bedff9" }
-# embassy-futures = { git = "https://github.com/embassy-rs/embassy", rev = "8c42b26fc623f556c865a0f27c7f956b06bedff9" }
-
-embassy-rp = { path = "/home/matt/3rd/rs/embassy/embassy-rp" }
-embassy-executor = { path = "/home/matt/3rd/rs/embassy/embassy-executor" }
-embassy-time = { path = "/home/matt/3rd/rs/embassy/embassy-time" }
-embassy-usb = { path = "/home/matt/3rd/rs/embassy/embassy-usb" }
-embassy-futures = { path = "/home/matt/3rd/rs/embassy/embassy-futures" }
+# embassy-rp isn't released to crates.io yet
+embassy-rp = { git = "https://github.com/embassy-rs/embassy", rev = "61be0e75c83961a42fc1d844159f1fed7d8afbea" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy", rev = "61be0e75c83961a42fc1d844159f1fed7d8afbea" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "61be0e75c83961a42fc1d844159f1fed7d8afbea" }
+embassy-usb = { git = "https://github.com/embassy-rs/embassy", rev = "61be0e75c83961a42fc1d844159f1fed7d8afbea" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy", rev = "61be0e75c83961a42fc1d844159f1fed7d8afbea" }

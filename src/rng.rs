@@ -1,7 +1,9 @@
 #[cfg(not(feature = "defmt"))]
+#[allow(unused_imports)]
 use log::{debug, info, warn, error, trace};
 
 #[cfg(feature = "defmt")]
+#[allow(unused_imports)]
 use defmt::{debug, info, warn, panic, error, trace};
 
 use core::cell::RefCell;
@@ -12,9 +14,7 @@ use critical_section::Mutex;
 use rand_chacha::ChaCha20Rng;
 use sha2::{Digest, Sha256};
 
-use cortex_m::peripheral::SYST;
-use embassy_rp::gpio::{Flex, Pin, Pull, AnyPin};
-use embassy_rp::{pac, Peripheral, PeripheralRef};
+use embassy_rp::gpio::Pin;
 
 use rand_chacha::rand_core::{RngCore, SeedableRng};
 

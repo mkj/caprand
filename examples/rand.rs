@@ -3,15 +3,16 @@
 #![feature(type_alias_impl_trait)]
 
 #[cfg(not(feature = "defmt"))]
+#[allow(unused_imports)]
 use log::{debug, info, warn, error};
 
 #[cfg(feature = "defmt")]
+#[allow(unused_imports)]
 use defmt::{debug, info, warn, panic, error};
 #[cfg(feature = "defmt")]
 use {defmt_rtt as _, panic_probe as _};
 
 use embassy_rp::gpio::Pin;
-use embassy_rp::Peripheral;
 use embassy_executor::Spawner;
 use embassy_time::{Timer, Duration};
 

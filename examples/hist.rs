@@ -7,15 +7,16 @@
 #![feature(type_alias_impl_trait)]
 
 #[cfg(not(feature = "defmt"))]
+#[allow(unused_imports)]
 use log::{debug, info, warn, error};
 
 #[cfg(feature = "defmt")]
+#[allow(unused_imports)]
 use defmt::{debug, info, warn, panic, error};
 #[cfg(feature = "defmt")]
 use {defmt_rtt as _, panic_probe as _};
 
-use embassy_rp::gpio::{Flex, AnyPin, Pin};
-use embassy_rp::Peripheral;
+use embassy_rp::gpio::Pin;
 use embassy_executor::Spawner;
 
 use caprand::cap;
@@ -49,8 +50,6 @@ async fn main(_spawner: Spawner) {
     // let mut gpio = Flex::new(p.PIN_15);
     // let mut gpio = Flex::new(p.PIN_20);
     // let mut gpio = p.PIN_20.into();
-
-    let mut hist = [0u32; 200];
 
     const PRINT: usize = 20000;
     // let PRINT = 50;

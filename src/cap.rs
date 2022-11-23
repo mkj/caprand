@@ -1,7 +1,9 @@
 #[cfg(not(feature = "defmt"))]
+#[allow(unused_imports)]
 use log::{debug, info, warn, error, trace};
 
 #[cfg(feature = "defmt")]
+#[allow(unused_imports)]
 use defmt::{error, debug, info, panic, trace};
 
 use core::arch::asm;

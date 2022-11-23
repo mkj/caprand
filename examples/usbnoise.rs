@@ -7,20 +7,20 @@
 #![feature(type_alias_impl_trait)]
 
 #[cfg(not(feature = "defmt"))]
+#[allow(unused_imports)]
 use log::{debug, info, warn, error};
 #[cfg(not(feature = "defmt"))]
 use panic_abort as _;
 
 #[cfg(feature = "defmt")]
+#[allow(unused_imports)]
 use defmt::{debug, info, warn, panic, error, trace};
 #[cfg(feature = "defmt")]
 use {defmt_rtt as _, panic_probe as _};
 
-use embassy_rp::gpio::{Flex, AnyPin, Pin};
-use embassy_rp::Peripheral;
+use embassy_rp::gpio::Pin;
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
-use embassy_time::{Timer, Duration, Instant};
 use embassy_rp::interrupt;
 use embassy_rp::usb::{Driver, Instance};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
