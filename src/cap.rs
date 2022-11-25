@@ -1,3 +1,7 @@
+//! The raw noise source using a capacitor on a GPIO pin.
+//!
+//! Most users should use [`setup()'](crate::setup) and ['random()'](crate::random) instead.
+//! This module is accessible for health testing and analysis.
 #[cfg(not(feature = "defmt"))]
 #[allow(unused_imports)]
 use log::{debug, info, warn, error, trace};
@@ -13,11 +17,11 @@ use embassy_rp::gpio::Pin;
 use embassy_rp::pac;
 
 /// Extra iterations prior to taking output.
-const WARMUP: u8 = 16;
+const WARMUP: u8 = 5;
 
 /// Drives a pin low for an exact number of cycles.
 /// Call with interrupts disabled if it's important.
-fn exact_low(pin: &impl Pin, low_cycles: u32) {
+pub fn exact_low(pin: &impl Pin, low_cycles: u32) {
     let pin_num = pin.pin() as usize;
     let mask = 1u32 << pin_num;
     // pin low
@@ -133,11 +137,18 @@ fn exact_low(pin: &impl Pin, low_cycles: u32) {
     }
 }
 
-fn time_rise(pin: &mut impl Pin, low_cycles: u32) -> Result<u32, ()> {
+/// Drives a pin low then times how long it takes to rise to logic high.
+///
+/// `low_cycles` is the amount of time to hold the pin low to discharge
+/// the capacitor. As the pullup charges the capacitor, it samples on every
+/// clock cycles in bursts of 6 bits. When the final bit of a burst is high,
+/// it returns that 6-bit burst as the value.
+fn time_rise(pin: &mut impl Pin, low_cycles: u32) -> Result<u8, ()> {
     let pin_num = pin.pin() as usize;
     let mask = 1u32 << pin_num;
 
     let pad = pac::PADS_BANK0.gpio(pin_num as usize);
+    // bank 0 single cycle IO in
     let gpio_in = pac::SIO.gpio_in(0).ptr();
 
     // enable pullup
@@ -146,17 +157,16 @@ fn time_rise(pin: &mut impl Pin, low_cycles: u32) -> Result<u32, ()> {
     // Drive low for a number of cycles
     exact_low(pin, low_cycles);
 
-    // bank 0 single cycle IO in
     let x0: u32;
     let x1: u32;
     let x2: u32;
     let x3: u32;
     let x4: u32;
     let x5: u32;
-    // Time how long it takes to pull up
+    // Time how long it takes for the pullup to reach high signal level
     unsafe {
         asm!(
-            // save
+            // save (rust asm doesn't handle frame pointer r7)
             "mov r10, r7",
 
             "222:",
@@ -189,68 +199,58 @@ fn time_rise(pin: &mut impl Pin, low_cycles: u32) -> Result<u32, ()> {
         );
     }
 
-    // let tick = t.done()?;
-
-    // let pos = if x0 & mask != 0 {
-    //     0
-    // } else if x1 & mask != 0 {
-    //     1
-    // } else if x2 & mask != 0 {
-    //     2
-    // } else if x3 & mask != 0 {
-    //     3
-    // } else if x4 & mask != 0 {
-    //     4
-    // } else if x5 & mask != 0 {
-    //     5
-    // } else {
-    //     6
-    // };
-    // let tick = tick + pos;
-    // // first measurement is less precise.
-    // let precise = pos != 0;
-
     // Combine all measurements in a constant-time way
-    // TODO: Check it really is constant time - seems like it should be.
     let result = (x0 & mask)
         | (x1 & mask).rotate_left(1)
         | (x2 & mask).rotate_left(2)
         | (x3 & mask).rotate_left(3)
-        | (x4 & mask).rotate_left(4)
-        | (x5 & mask).rotate_left(5);
-    let result = result.rotate_right(pin_num as u32);
+        | (x5 & mask).rotate_left(5)
+        | (x4 & mask).rotate_left(4);
 
-    // disable pullup until next run
+    let result = result.rotate_right(pin_num as u32);
+    let result = result as u8;
+
+    // Disable pullup until next run. Preserved capacitor charge
+    // carried over to the next iteration helps improve noise.
     unsafe { pad.modify(|s| s.set_pue(false)); }
 
     Ok(result)
 }
 
-/// Returns the least significant bit set, or 32 if 0.
+/// Returns the least significant bit set, or 8 if 0.
 /// Is neither constant time nor efficient, for display purposes only.
-pub fn lsb(v: u32) -> usize {
-    for i in 0..u32::BITS {
+pub fn lsb(v: u8) -> usize {
+    for i in 0..u8::BITS {
         if v & 1<<i != 0 {
             return i as usize
         }
     }
-    return 32
+    return 8
 }
 
+/// A noise source iterator using a capacitor on a GPIO pin.
+///
+/// For each output sample it drives a pin low then times
+/// how long it takes to rise to logic high. `low_cycles` is the amount of
+/// time to hold the pin low to discharge the capacitor.
+/// As the pullup charges the capacitor, it samples on every
+/// clock cycles in bursts of 6 bits. When the final bit of a burst is high,
+/// it outputs that 6-bit burst as the value.
+///
+/// Samples are correlated and biased, so must be distilled before
+/// further use, using a cryptographic hash or similar scheme.
 pub struct Noise<'a, P: Pin> {
     pin: &'a mut P,
     low_cycles: u32,
-    skip: u8,
     _setup: PinSetup,
 }
 
 impl<'a, P: Pin> Noise<'a, P> {
-    pub fn new(pin: &'a mut P, low_cycles: u32, skip: u8) -> Result<Self, ()> {
+    pub fn new(pin: &'a mut P, low_cycles: u32) -> Result<Self, ()> {
         let setup = PinSetup::new(pin.pin());
         let mut s = Self {
             pin,
             low_cycles,
-            skip,
             _setup: setup,
         };
 
@@ -261,15 +261,17 @@ impl<'a, P: Pin> Noise<'a, P> {
         Ok(s)
     }
 
-    pub fn extract(self) -> impl Iterator<Item = Result<bool, ()>> + 'a {
+    // bodgy, don't use this.
+    pub fn extract(self, skip: usize) -> impl Iterator<Item = Result<bool, ()>> + 'a {
         // reduce rate to decorrelate
-        let skip = self.skip as usize;
         let i = self.step_by(skip);
 
         // discard first-sample hits
         let i = i.filter(|x| x.unwrap_or(0) & 1 == 0);
 
         // von Neumann extractor
+        // TODO: the input values aren't binary so this mightn't be good.
+        // Still might be useful for health testing...
         Pairs { iter: i }
             .filter_map(|(a,b)| {
                 if let (Ok(a), Ok(b)) = (a,b) {
@@ -338,14 +340,14 @@ impl<I> Iterator for Pairs<I>
     }
 }
 
-// `f()` is called on each output `u32`.
+// `f()` is called on each output `u8`.
 pub fn noise<'d, F>(
     pin: &mut impl Pin,
     low_cycles: u32,
     mut f: F,
 ) -> Result<(), ()>
 where
-    F: FnMut(u32) -> bool,
+    F: FnMut(u8) -> bool,
 {
     let pin_num = pin.pin() as usize;
     let mut warming = WARMUP;
@@ -370,8 +372,9 @@ where
     Ok(())
 }
 
+/// Determines a good pull-low time to use for the capacitor
 pub fn best_low_time(pin: &mut impl Pin, times: impl IntoIterator<Item = u32>) -> Result<u32, ()> {
-    const ITERS: usize = 4000;
+    const ITERS: usize = 200;
     let mut best = None;
     for t in times {
         let mut hist = [0u32; 64];

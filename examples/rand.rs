@@ -26,7 +26,7 @@ async fn main(_spawner: Spawner) {
 
     caprand::setup(&mut gpio).unwrap();
 
-    register_custom_getrandom!(caprand::random);
+    register_custom_getrandom!(caprand::getrandom);
 
     loop {
         let mut mystery = [0u8; 10];

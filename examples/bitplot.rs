@@ -105,57 +105,60 @@ fn nibble_hex(c: u8) -> u8 {
     }
 }
 
+fn bin_6bits(c: u8) -> [char; 6] {
+    let mut v = [
+        c,
+        c >> 1,
+        c >> 2,
+        c >> 3,
+        c >> 4,
+        c >> 5,
+    ].map(|x| if (x&1) == 0 { '_' } else { '-' });
+
+    // trace!("{:02x} {} {} {} {} {} a", c, v[0], v[1], v[2], v[3], v[4]);
+
+    for x in v.iter_mut().take_while(|x| **x == '_') {
+        *x = ' '
+    }
+
+    for i in 0..5 {
+        let i = 5 - i;
+        // trace!("{} {} {}", i, v[i-1], v[i]);
+        if v[i] == '-' && v[i-1] == '-' {
+            // trace!("sp");
+            v[i] = ' '
+        } else {
+            // trace!("br");
+            break
+        }
+    }
+    // trace!("{:02x} {} {} {} {} {} b", c, v[0], v[1], v[2], v[3], v[4]);
+    v
+}
+
 async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, class: &mut CdcAcmClass<'d, Driver<'d, T>>) -> Result<(), ()> {
 
-    // max packet is 64 bytes
-    const CHUNK: usize = 62;
-    let mut buf = [0u8; CHUNK+1];
-    buf[CHUNK] = b'\n';
+    // max packet is 64 bytes. we encode and add newline.
+    const CHUNK: usize = 9;
+
 
     let low_cycles = caprand::cap::best_low_time(pin, 10..=90u32).unwrap();
     trace!("low_cycles = {}", low_cycles);
     let mut noise = caprand::cap::Noise::new(pin, low_cycles)?;
-
     loop {
-        // let mut b = buf.iter_mut();
-        // loop {
-        //     match b.next() {
-        //         Some(b) => *b = noise.next().unwrap()?,
-        //         None => break
-        //     }
-        // }
+        let mut buf = [0u8; (CHUNK*(6+1))];
+        let mut b = buf.iter_mut();
 
         // discard one value after the delay of usb write
         noise.next().unwrap()?;
 
-        let (_, b) = buf.split_last_mut().unwrap();
-        for x in b.iter_mut() {
+        for _ in 0..CHUNK {
             let v = noise.next().unwrap()?;
-            let v = if v & 1 > 0 {
-                0
-            } else if v & 2 > 0 {
-                1
-            } else if v & 4 > 0 {
-                2
-            } else if v & 8 > 0 {
-                3
-            } else if v & 16 > 0 {
-                4
-            } else if v & 32 > 0 {
-                5
-            } else {
-                panic!("bad range")
-            };
-            *x = b'0' + v;
+            for x in bin_6bits(v) {
+                *b.next().unwrap() = x as u8;
+            }
+            *b.next().unwrap() = b'\n';
         }
-
-        // let mut hex = ['B' as u8; CHUNK*2+1];
-        // let mut m = hex.iter_mut();
-        // for c in buf {
-        //     *m.next().unwrap() = nibble_hex(c >> 4);
-        //     *m.next().unwrap() = nibble_hex(c & 0xf);
-        // }
-        // *m.next().unwrap() = b'\n';
         class.write_packet(&buf).await.unwrap();
     }
 }

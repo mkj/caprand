@@ -7,5 +7,5 @@ mod rng;
 pub mod cap;
 // mod numpin;
 
-pub use rng::{setup, random};
+pub use rng::{setup, getrandom};
 

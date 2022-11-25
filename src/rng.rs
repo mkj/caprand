@@ -30,7 +30,20 @@ pub fn error() -> getrandom::Error {
 
 static RNG: Mutex<RefCell<Option<CapRng>>> = Mutex::new(RefCell::new(None));
 
-pub fn random(buf: &mut [u8]) -> Result<(), getrandom::Error> {
+/// A random byte generator for use with `register_custom_getrandom`
+///
+/// [`setup()`](setup) must be called prior to using this function.
+///
+/// See documentation of [`getrandom::register_custom_getrandom`](getrandom::register_custom_getrandom).
+///
+/// # Examples
+///
+/// ```
+/// fn main() {
+///     getrandom::register_custom_getrandom!(caprand::getrandom);
+/// }
+/// ```
+pub fn getrandom(buf: &mut [u8]) -> Result<(), getrandom::Error> {
     critical_section::with(|cs| {
         let mut rng = RNG.borrow_ref_mut(cs);
         let rng = rng.deref_mut();
@@ -44,9 +57,30 @@ pub fn random(buf: &mut [u8]) -> Result<(), getrandom::Error> {
     })
 }
 
+/// Seed the random generator from a capacitor noise source.
+///
 /// Call this at early startup. If noisy interrupts or time slicing is happening the caller
 /// should disable interrupts.
-/// `syst` will be modified.
+///
+/// # Arguments
+///
+/// * pin - The GPIO pin with a capacitor attached. This will be driven low and pulled high,
+/// with timing used as a random source. The `Pin` may be used for other purposes once
+/// `setup()` completes.
+///
+/// # Examples
+///
+/// ```
+/// fn main() {
+///     let mut p = embassy_rp::init(Default::default());
+///
+///     caprand::setup(&mut p.PIN_10).unwrap();
+///     getrandom::register_custom_getrandom!(caprand::random);
+///
+///     let mut mystery = [0u8; 10];
+///     getrandom::getrandom(&mut mystery).unwrap();
+/// }
+/// ```
 pub fn setup(
     pin: &mut impl Pin,
 ) -> Result<(), getrandom::Error> {
