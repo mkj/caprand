@@ -1,7 +1,8 @@
 //! The raw noise source using a capacitor on a GPIO pin.
 //!
-//! Most users should use [`setup()'](crate::setup) and ['random()'](crate::random) instead.
+//! Most users should use [`caprand::setup`](crate::setup) and [`caprand::getrandom`](crate::getrandom) instead.
 //! This module is accessible for health testing and analysis.
+use cortex_m::peripheral::SYST;
 #[cfg(not(feature = "defmt"))]
 #[allow(unused_imports)]
 use log::{debug, info, warn, error, trace};
@@ -143,7 +144,7 @@ pub fn exact_low(pin: &impl Pin, low_cycles: u32) {
 /// the capacitor. As the pullup charges the capacitor, it samples on every
 /// clock cycles in bursts of 6 bits. When the final bit of a burst is high,
 /// it returns that 6-bit burst as the value.
-fn time_rise(pin: &mut impl Pin, low_cycles: u32) -> Result<u8, ()> {
+fn time_rise(pin: &mut impl Pin, low_cycles: u32, syst: Option<&mut SYST>) -> Result<u8, ()> {
     let pin_num = pin.pin() as usize;
     let mask = 1u32 << pin_num;
 
@@ -155,7 +156,12 @@ fn time_rise(pin: &mut impl Pin, low_cycles: u32) -> Result<u8, ()> {
     unsafe { pad.modify(|s| s.set_pue(true)); }
 
     // Drive low for a number of cycles
+    let t = syst.map(|syst| SyTi::new(syst));
     exact_low(pin, low_cycles);
+    if let Some(t) = t {
+        let t = t.done()?;
+        trace!("exact {}", t);
+    }
 
     let x0: u32;
     let x1: u32;
@@ -219,14 +225,44 @@ fn time_rise(pin: &mut impl Pin, low_cycles: u32) -> Result<u8, ()> {
 
 /// Returns the least significant bit set, or 8 if 0.
 /// Is neither constant time nor efficient, for display purposes only.
-pub fn lsb(v: u8) -> usize {
+pub fn lsb(v: u8) -> u8 {
     for i in 0..u8::BITS {
         if v & 1<<i != 0 {
-            return i as usize
+            return i as u8
         }
     }
     return 8
 }
+
+/// Wraps timing with SYST. The clock source must already be configured.
+struct SyTi<'t> {
+    syst: &'t mut SYST,
+    t1: u32,
+}
+
+impl<'t> SyTi<'t> {
+    fn new(syst: &'t mut SYST) -> Self {
+        syst.clear_current();
+        syst.enable_counter();
+        Self {
+            syst,
+            t1: SYST::get_reload(),
+        }
+    }
+
+    /// returns the duration, or failure on overflow
+    fn done(self) -> Result<u32, ()> {
+        let t2 = SYST::get_current();
+        // trace!("t1 {} t2 {} dif {}", self.t1, t2, self.t1 - t2);
+        if self.syst.has_wrapped() {
+            error!("SYST wrapped");
+            return Err(());
+        }
+        self.syst.disable_counter();
+        Ok(self.t1 - t2)
+    }
+}
+
 
 /// A noise source iterator using a capacitor on a GPIO pin.
 ///
@@ -261,6 +297,16 @@ impl<'a, P: Pin> Noise<'a, P> {
         Ok(s)
     }
 
+    pub fn next_with_systick(&mut self, syst: &mut SYST) -> Result<u32, ()> {
+        critical_section::with(|_cs| {
+            let t = SyTi::new(syst);
+            let r = time_rise(self.pin, self.low_cycles, None)?;
+            let t = t.done()?;
+            let t = t + lsb(r) as u32;
+            Ok(t)
+        })
+    }
+
     // bodgy, don't use this.
     pub fn extract(self, skip: usize) -> impl Iterator<Item = Result<bool, ()>> + 'a {
         // reduce rate to decorrelate
@@ -293,7 +339,7 @@ impl<P: Pin> Iterator for Noise<'_, P> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let r = critical_section::with(|_cs| {
-            let r = time_rise(self.pin, self.low_cycles)?;
+            let r = time_rise(self.pin, self.low_cycles, None)?;
             Ok(r as u8)
         });
         Some(r)
@@ -356,7 +402,7 @@ where
 
     for (_i, _) in core::iter::repeat(()).enumerate() {
         let r = critical_section::with(|_cs| {
-            let r = time_rise(pin, low_cycles)?;
+            let r = time_rise(pin, low_cycles, None)?;
             Ok(r)
         })?;
 
@@ -378,12 +424,12 @@ pub fn best_low_time(pin: &mut impl Pin, times: impl IntoIterator<Item = u32>) -
     let mut best = None;
     for t in times {
         let mut hist = [0u32; 64];
-        let mut hd = [0u32; 33];
+        let mut hd = [0u32; 9];
         let mut n = 0;
         noise(pin, t,
             |v| {
                 hist[v as usize] += 1;
-                hd[lsb(v)] += 1;
+                hd[lsb(v) as usize] += 1;
                 n += 1;
                 n < ITERS
             })?;
