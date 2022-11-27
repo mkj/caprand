@@ -2,6 +2,8 @@
 name = "caprand"
 version = "0.1.0"
 edition = "2021"
+license = "0BSD"
+authors = ["Matt Johnston <matt@ucc.asn.au>"]
 
 [dependencies]
 
