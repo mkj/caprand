@@ -23,13 +23,13 @@ The time taken to reach “high” level is used as the random sample value.
 The time is measured to an exact clock cycle, in bursts of 5 bits (limited by number of registers).
 That low order part of the pullup time is output as a noise sample. Samples are hashed together
 to form a seed, which seeds a [ChaCha20](https://docs.rs/rand_chacha/latest/rand_chacha/struct.ChaCha20Rng.html)
-cryptographic DRNG.
+cryptographic DRBG.
 
 ## Security
 
 The noise source has not been thoroughly quantified. Empirical testing seems
 to show 1-2 bits per sample. As a workaround it takes 100 noise samples per bit of output,
-hashing 256100 input noise samples to seed the DRNG.
+hashing 256100 input noise samples to seed the DRBG.
 
 Online health tests are yet to be implemented.
 
