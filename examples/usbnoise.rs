@@ -97,7 +97,6 @@ async fn main(_spawner: Spawner) {
     join(usb_fut, echo_fut).await;
 }
 
-
 fn nibble_hex(c: u8) -> u8 {
     debug_assert!(c <= 0xf);
     if c < 10 {
@@ -109,41 +108,28 @@ fn nibble_hex(c: u8) -> u8 {
 
 async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, class: &mut CdcAcmClass<'d, Driver<'d, T>>) -> Result<(), ()> {
 
-    // max packet is 64 bytes
-    const CHUNK: usize = 62;
-    let mut buf = [0u8; CHUNK+1];
-    buf[CHUNK] = b'\n';
+    // max packet is 64 bytes. We discard the first sample from the buffer.
+    const CHUNK: usize = 32;
 
-    let low_cycles = caprand::cap::best_low_time(pin, 10..=90u32).unwrap();
-    trace!("low_cycles = {}", low_cycles);
+    // let low_cycles = caprand::cap::best_low_time(pin, 10..=90u32).unwrap();
+    let low_cycles = 1;
     let mut noise = caprand::cap::RawNoise::new(pin, low_cycles)?;
+    trace!("low_cycles = {}", low_cycles);
 
     loop {
-        // let mut b = buf.iter_mut();
-        // loop {
-        //     match b.next() {
-        //         Some(b) => *b = noise.next().unwrap()?,
-        //         None => break
-        //     }
-        // }
-
-        // discard one value after the delay of usb write
+        // discard one value at the top of the loop
         noise.next().unwrap()?;
 
-        let (_, b) = buf.split_last_mut().unwrap();
-        for x in b.iter_mut() {
-            let v = noise.next().unwrap()?;
-            let v = cap::lsb(v);
-            *x = b'0' + v;
+        let mut hex = ['B' as u8; CHUNK*2+1];
+        let mut m = hex.iter_mut();
+        for _ in 0..CHUNK {
+            let c = noise.next().unwrap()?;
+            *m.next().unwrap() = nibble_hex(c >> 4);
+            *m.next().unwrap() = nibble_hex(c & 0xf);
         }
 
-        // let mut hex = ['B' as u8; CHUNK*2+1];
-        // let mut m = hex.iter_mut();
-        // for c in buf {
-        //     *m.next().unwrap() = nibble_hex(c >> 4);
-        //     *m.next().unwrap() = nibble_hex(c & 0xf);
-        // }
-        // *m.next().unwrap() = b'\n';
-        class.write_packet(&buf).await.unwrap();
+        *m.next().unwrap() = b'\n';
+        // discard first sample
+        class.write_packet(&hex[2..]).await.unwrap();
     }
 }
