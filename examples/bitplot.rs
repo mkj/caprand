@@ -1,6 +1,4 @@
-//! Prints raw samples from the capacitor random number generator.
-//! These would not usually be used directly, instead use `CapRng`.
-//! Raw samples are useful to analyse the entropy.
+//! Prints raw samples as ascii art, to usb serial.
 
 #![no_std]
 #![no_main]
