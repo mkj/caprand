@@ -26,6 +26,8 @@ use embassy_rp::usb::{Driver, Instance};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::{Builder, Config};
 
+use caprand::cap;
+
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     info!("top");
@@ -114,7 +116,7 @@ async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, class: &mut CdcAcmClass<'
 
     let low_cycles = caprand::cap::best_low_time(pin, 10..=90u32).unwrap();
     trace!("low_cycles = {}", low_cycles);
-    let mut noise = caprand::cap::Noise::new(pin, low_cycles)?;
+    let mut noise = caprand::cap::RawNoise::new(pin, low_cycles)?;
 
     loop {
         // let mut b = buf.iter_mut();
@@ -131,21 +133,7 @@ async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, class: &mut CdcAcmClass<'
         let (_, b) = buf.split_last_mut().unwrap();
         for x in b.iter_mut() {
             let v = noise.next().unwrap()?;
-            let v = if v & 1 > 0 {
-                0
-            } else if v & 2 > 0 {
-                1
-            } else if v & 4 > 0 {
-                2
-            } else if v & 8 > 0 {
-                3
-            } else if v & 16 > 0 {
-                4
-            } else if v & 32 > 0 {
-                5
-            } else {
-                panic!("bad range")
-            };
+            let v = cap::lsb(v);
             *x = b'0' + v;
         }
 

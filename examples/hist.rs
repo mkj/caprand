@@ -120,7 +120,7 @@ async fn main(_spawner: Spawner) {
                     // info!("{}", v);
                     dump[n % DUMPS] = v as u8;
                     let lb = cap::lsb(v);
-                    hist[lb] += 1;
+                    hist[lb as usize] += 1;
                     n += 1;
                     if n % PRINT == 0 {
                         info!("gpio {} delay {} iter {}", pin, low_cycles, n);

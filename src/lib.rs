@@ -3,7 +3,7 @@
 #[cfg(feature="log")]
 use log::error;
 
-mod rng;
+pub mod rng;
 pub mod cap;
 // mod numpin;
 

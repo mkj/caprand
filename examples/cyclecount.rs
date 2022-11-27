@@ -23,10 +23,10 @@ async fn main(_spawner: Spawner) {
     let mut p = embassy_rp::init(Default::default());
     let mut cp = cortex_m::peripheral::Peripherals::take().unwrap();
 
-    let low_cycles = 12;
+    let low_cycles = 1;
     let pin = &mut p.PIN_10;
     let syst = &mut cp.SYST;
-    let mut noise = caprand::cap::Noise::new(pin, low_cycles).unwrap();
+    let mut noise = caprand::cap::RawNoise::new(pin, low_cycles).unwrap();
 
     const ITER: usize = 1000;
 

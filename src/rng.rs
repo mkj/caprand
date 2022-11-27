@@ -59,8 +59,7 @@ pub fn getrandom(buf: &mut [u8]) -> Result<(), getrandom::Error> {
 
 /// Seed the random generator from a capacitor noise source.
 ///
-/// Call this at early startup. If noisy interrupts or time slicing is happening the caller
-/// should disable interrupts.
+/// Call this at early startup.
 ///
 /// # Arguments
 ///
@@ -95,15 +94,20 @@ pub fn setup(
 
 // TODO: this is another impl of chacha20, can it use chacha20 crate instead? Is the size much?
 // TODO: have some kind of fast erasure RNG instead?
-struct CapRng(ChaCha20Rng);
+/// A cryptographic PRNG seeded by the capacitor noise source.
+pub struct CapRng(ChaCha20Rng);
+
+impl rand::CryptoRng for CapRng {
+}
 
 impl CapRng {
-    // const SEED_SAMPLES: usize = 1024;
-    const SEED_SAMPLES: usize = 1024 * 100;
+    /// The number of noies samples to use for seeding.
+    ///
+    /// We have 256 bits output seed, and assume a noise source entropy rate of at least 0.01
+    pub const SEED_SAMPLES: usize = 256 * 100;
 
     /// Call this at early startup. If noisy interrupts or time slicing is happening the caller
     /// should disable interrupts.
-    /// `syst` will be modified.
     fn new(pin: &mut impl Pin,
     ) -> Result<Self, getrandom::Error> {
         let low_cycles = crate::cap::best_low_time(pin, 0..=100).unwrap();

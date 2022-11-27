@@ -168,7 +168,6 @@ fn time_rise(pin: &mut impl Pin, low_cycles: u32, syst: Option<&mut SYST>) -> Re
     let x2: u32;
     let x3: u32;
     let x4: u32;
-    let x5: u32;
     // Time how long it takes for the pullup to reach high signal level
     unsafe {
         asm!(
@@ -193,7 +192,7 @@ fn time_rise(pin: &mut impl Pin, low_cycles: u32, syst: Option<&mut SYST>) -> Re
             // restore
             "mov r7, r10",
 
-            mask = inlateout(reg) mask => x5,
+            mask = in(reg) mask,
             gpio_in = in(reg) gpio_in,
             x0 = out(reg) x0,
             x1 = out(reg) x1,
@@ -210,8 +209,8 @@ fn time_rise(pin: &mut impl Pin, low_cycles: u32, syst: Option<&mut SYST>) -> Re
         | (x1 & mask).rotate_left(1)
         | (x2 & mask).rotate_left(2)
         | (x3 & mask).rotate_left(3)
-        | (x5 & mask).rotate_left(5)
-        | (x4 & mask).rotate_left(4);
+        | (x4 & mask).rotate_left(4)
+        ;
 
     let result = result.rotate_right(pin_num as u32);
     let result = result as u8;
@@ -273,15 +272,15 @@ impl<'t> SyTi<'t> {
 /// clock cycles in bursts of 6 bits. When the final bit of a burst is high,
 /// it outputs that 6-bit burst as the value.
 ///
-/// Samples are correlated and biased, so must be distilled before
-/// further use, using a cryptographic hash or similar scheme.
-pub struct Noise<'a, P: Pin> {
+/// Samples are correlated and biased, so must be processed before
+/// further use, using a cryptographic extractor or similar scheme.
+pub struct RawNoise<'a, P: Pin> {
     pin: &'a mut P,
     low_cycles: u32,
     _setup: PinSetup,
 }
 
-impl<'a, P: Pin> Noise<'a, P> {
+impl<'a, P: Pin> RawNoise<'a, P> {
     pub fn new(pin: &'a mut P, low_cycles: u32) -> Result<Self, ()> {
         let setup = PinSetup::new(pin.pin());
         let mut s = Self {
@@ -334,7 +333,7 @@ impl<'a, P: Pin> Noise<'a, P> {
     }
 }
 
-impl<P: Pin> Iterator for Noise<'_, P> {
+impl<P: Pin> Iterator for RawNoise<'_, P> {
     type Item = Result<u8, ()>;
 
     fn next(&mut self) -> Option<Self::Item> {

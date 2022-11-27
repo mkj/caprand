@@ -22,6 +22,7 @@ use embassy_rp::gpio::Pin;
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_rp::interrupt;
+use embassy_rp::pac;
 use embassy_rp::usb::{Driver, Instance};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::{Builder, Config};
@@ -30,6 +31,12 @@ use embassy_usb::{Builder, Config};
 async fn main(_spawner: Spawner) {
     info!("top");
     let mut p = embassy_rp::init(Default::default());
+
+    let rosc = unsafe { pac::ROSC.ctrl().read().enable().0 };
+    trace!("rosc {}", rosc);
+    // unsafe{ pac::ROSC.ctrl().modify(|s| s.set_enable(pac::rosc::vals::Enable::DISABLE)) };
+    let rosc = unsafe { pac::ROSC.ctrl().read().enable().0 };
+    trace!("rosc {}", rosc);
 
     // Create the driver, from the HAL.
     let irq = interrupt::take!(USBCTRL_IRQ);
@@ -105,33 +112,32 @@ fn nibble_hex(c: u8) -> u8 {
     }
 }
 
-fn bin_6bits(c: u8) -> [char; 6] {
+fn bin_5bits(c: u8) -> [char; 5] {
     let mut v = [
         c,
         c >> 1,
         c >> 2,
         c >> 3,
         c >> 4,
-        c >> 5,
-    ].map(|x| if (x&1) == 0 { '_' } else { '-' });
+    ].map(|x| if (x&1) == 0 { '_' } else { '+' });
 
     // trace!("{:02x} {} {} {} {} {} a", c, v[0], v[1], v[2], v[3], v[4]);
 
-    for x in v.iter_mut().take_while(|x| **x == '_') {
-        *x = ' '
-    }
+    // for x in v.iter_mut().take_while(|x| **x == '_') {
+    //     *x = ' '
+    // }
 
-    for i in 0..5 {
-        let i = 5 - i;
-        // trace!("{} {} {}", i, v[i-1], v[i]);
-        if v[i] == '-' && v[i-1] == '-' {
-            // trace!("sp");
-            v[i] = ' '
-        } else {
-            // trace!("br");
-            break
-        }
-    }
+    // for i in 0..5 {
+    //     let i = 5 - i;
+    //     // trace!("{} {} {}", i, v[i-1], v[i]);
+    //     if v[i] == '-' && v[i-1] == '-' {
+    //         // trace!("sp");
+    //         v[i] = ' '
+    //     } else {
+    //         // trace!("br");
+    //         break
+    //     }
+    // }
     // trace!("{:02x} {} {} {} {} {} b", c, v[0], v[1], v[2], v[3], v[4]);
     v
 }
@@ -144,9 +150,24 @@ async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, class: &mut CdcAcmClass<'
 
     let low_cycles = caprand::cap::best_low_time(pin, 10..=90u32).unwrap();
     trace!("low_cycles = {}", low_cycles);
-    let mut noise = caprand::cap::Noise::new(pin, low_cycles)?;
+    let low_cycles = 1;
+    let mut noise = caprand::cap::RawNoise::new(pin, low_cycles)?;
+
+    // let mut noise = noise.filter(|v| {
+    //     if let Ok(v) = v {
+    //         if v & 1 == 1 {
+    //             false
+    //         } else if v & 0b11110 == 0 {
+    //             false
+    //         } else {
+    //             true
+    //         }
+    //     } else {
+    //         true
+    //     }
+    // });
     loop {
-        let mut buf = [0u8; (CHUNK*(6+1))];
+        let mut buf = [b'A'; (CHUNK*(5+1))];
         let mut b = buf.iter_mut();
 
         // discard one value after the delay of usb write
@@ -154,7 +175,7 @@ async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, class: &mut CdcAcmClass<'
 
         for _ in 0..CHUNK {
             let v = noise.next().unwrap()?;
-            for x in bin_6bits(v) {
+            for x in bin_5bits(v) {
                 *b.next().unwrap() = x as u8;
             }
             *b.next().unwrap() = b'\n';
