@@ -29,12 +29,16 @@ embassy-time = { version = "0.1.0" }
 panic-probe = { version = "0.3" }
 defmt-rtt = { version = "0.3" }
 getrandom = { version = "0.2", default-features = false, features = ["custom"]}
+heapless = "0.7"
 
 [features]
 defmt = [ "dep:defmt" ]
 
 [profile.release]
 debug = 2
+
+[package.metadata.docs.rs]
+features = ["getrandom/custom"]
 
 [patch.crates-io]
 # embassy isn't released to crates.io yet
