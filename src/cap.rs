@@ -240,7 +240,9 @@ struct SyTi<'t> {
 }
 
 impl<'t> SyTi<'t> {
+    /// panics if `syst` is not using the core clock.
     fn new(syst: &'t mut SYST) -> Self {
+        assert!(syst.get_clock_source() == cortex_m::peripheral::syst::SystClkSource::Core);
         syst.clear_current();
         syst.enable_counter();
         Self {
@@ -252,7 +254,6 @@ impl<'t> SyTi<'t> {
     /// returns the duration, or failure on overflow
     fn done(self) -> Result<u32, ()> {
         let t2 = SYST::get_current();
-        // trace!("t1 {} t2 {} dif {}", self.t1, t2, self.t1 - t2);
         if self.syst.has_wrapped() {
             error!("SYST wrapped");
             return Err(());
@@ -304,32 +305,6 @@ impl<'a, P: Pin> RawNoise<'a, P> {
             let t = t + lsb(r) as u32;
             Ok(t)
         })
-    }
-
-    // bodgy, don't use this.
-    pub fn extract(self, skip: usize) -> impl Iterator<Item = Result<bool, ()>> + 'a {
-        // reduce rate to decorrelate
-        let i = self.step_by(skip);
-
-        // discard first-sample hits
-        let i = i.filter(|x| x.unwrap_or(0) & 1 == 0);
-
-        // von Neumann extractor
-        // TODO: the input values aren't binary so this mightn't be good.
-        // Still might be useful for health testing...
-        Pairs { iter: i }
-            .filter_map(|(a,b)| {
-                if let (Ok(a), Ok(b)) = (a,b) {
-                    // trace!("{} {}", a, b);
-                    if a == b {
-                        None
-                    } else {
-                        Some(Ok(a > b))
-                    }
-                } else {
-                    Some(Err(()))
-                }
-            })
     }
 }
 
@@ -385,38 +360,6 @@ impl<I> Iterator for Pairs<I>
     }
 }
 
-// `f()` is called on each output `u8`.
-pub fn noise<'d, F>(
-    pin: &mut impl Pin,
-    low_cycles: u32,
-    mut f: F,
-) -> Result<(), ()>
-where
-    F: FnMut(u8) -> bool,
-{
-    let pin_num = pin.pin() as usize;
-    let mut warming = WARMUP;
-
-    let _p = PinSetup::new(pin_num as u8);
-
-    for (_i, _) in core::iter::repeat(()).enumerate() {
-        let r = critical_section::with(|_cs| {
-            let r = time_rise(pin, low_cycles, None)?;
-            Ok(r)
-        })?;
-
-        if warming == 0 {
-            // real output
-            if !f(r) {
-                // no more output wanted
-                break
-            }
-        }
-        warming = warming.saturating_sub(1);
-    }
-    Ok(())
-}
-
 /// Determines a good pull-low time to use for the capacitor
 pub fn best_low_time(pin: &mut impl Pin, times: impl IntoIterator<Item = u32>) -> Result<u32, ()> {
     const ITERS: usize = 200;
@@ -424,14 +367,12 @@ pub fn best_low_time(pin: &mut impl Pin, times: impl IntoIterator<Item = u32>) -
     for t in times {
         let mut hist = [0u32; 64];
         let mut hd = [0u32; 9];
-        let mut n = 0;
-        noise(pin, t,
-            |v| {
-                hist[v as usize] += 1;
-                hd[lsb(v) as usize] += 1;
-                n += 1;
-                n < ITERS
-            })?;
+        let noise = RawNoise::new(pin, t)?;
+        for v in noise.take(ITERS) {
+            let v = v?;
+            hist[v as usize] += 1;
+            hd[lsb(v) as usize] += 1;
+        }
 
         let hmax = *hist.iter().max().unwrap();
         // let hmax = *hd.iter().max().unwrap();

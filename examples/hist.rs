@@ -102,7 +102,7 @@ async fn main(_spawner: Spawner) {
     // ];
     let mut gpios = [
         p.PIN_25.degrade(),
-        // p.PIN_10.degrade(),
+        p.PIN_10.degrade(),
     ];
 
     const DUMPS: usize = 1<<17;
@@ -115,24 +115,24 @@ async fn main(_spawner: Spawner) {
             let low_cycles = cap::best_low_time(gpio, 30..=50u32).unwrap();
             let mut n = 0;
             let mut hist = [0u32; 33];
-            cap::noise(gpio, low_cycles,
-                |v| {
-                    // info!("{}", v);
-                    dump[n % DUMPS] = v as u8;
-                    let lb = cap::lsb(v);
-                    hist[lb as usize] += 1;
-                    n += 1;
-                    if n % PRINT == 0 {
-                        info!("gpio {} delay {} iter {}", pin, low_cycles, n);
-                        for (p, h) in hist.iter_mut().enumerate() {
-                            if *h > 0 {
-                                info!("{}: {}", p, h);
-                                *h = 0;
-                            }
+            let noise = cap::RawNoise::new(gpio, low_cycles).unwrap();
+            for v in noise.take(PRINT) {
+                let v = v.unwrap();
+                // info!("{}", v);
+                dump[n % DUMPS] = v as u8;
+                let lb = cap::lsb(v);
+                hist[lb as usize] += 1;
+                n += 1;
+                if n % PRINT == 0 {
+                    info!("gpio {} delay {} iter {}", pin, low_cycles, n);
+                    for (p, h) in hist.iter_mut().enumerate() {
+                        if *h > 0 {
+                            info!("{}: {}", p, h);
+                            *h = 0;
                         }
                     }
-                    n < PRINT
-            }).unwrap();
+                }
+            }
         info!("done");
         }
     }

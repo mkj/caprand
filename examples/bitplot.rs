@@ -100,18 +100,8 @@ async fn main(_spawner: Spawner) {
     join(usb_fut, echo_fut).await;
 }
 
-
-fn nibble_hex(c: u8) -> u8 {
-    debug_assert!(c <= 0xf);
-    if c < 10 {
-        b'0' + c
-    } else {
-        b'a' - 0xa + c
-    }
-}
-
 fn bin_5bits(c: u8) -> [char; 5] {
-    let mut v = [
+    let v = [
         c,
         c >> 1,
         c >> 2,

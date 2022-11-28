@@ -31,8 +31,6 @@ use cortex_m::peripheral::SYST;
 use heapless::String;
 use core::fmt::Write;
 
-use caprand::cap;
-
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     info!("top");
@@ -92,7 +90,7 @@ async fn main(_spawner: Spawner) {
 
     let syst = &mut cp.SYST;
     // This might break embassy if we were using async timers.
-    syst.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
+    // syst.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
 
     // Do stuff with the class!
     let echo_fut = async {
@@ -105,15 +103,6 @@ async fn main(_spawner: Spawner) {
     };
 
     join(usb_fut, echo_fut).await;
-}
-
-fn nibble_hex(c: u8) -> u8 {
-    debug_assert!(c <= 0xf);
-    if c < 10 {
-        b'0' + c
-    } else {
-        b'a' - 0xa + c
-    }
 }
 
 async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, syst: &mut SYST, class: &mut CdcAcmClass<'d, Driver<'d, T>>) -> Result<(), ()> {

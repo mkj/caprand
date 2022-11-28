@@ -7,7 +7,8 @@ it requires further analysis before use in applications with consequences.
 This is based on Peter Allan’s [twocent](https://github.com/alwynallan/twocents), with
 half the component and pin count.
 
-An end program would use [getrandom](https://docs.rs/getrandom) with `custom` feature
+An end program would use [getrandom](https://docs.rs/getrandom) with `custom` feature,
+see [rand](examples/rand.rs) example.
 
 ```rust
     caprand::setup(&mut p.PIN_10).unwrap();
@@ -29,7 +30,7 @@ cryptographic DRBG.
 
 The noise source has not been thoroughly quantified. Empirical testing seems
 to show 1-2 bits per sample. As a workaround it takes 100 noise samples per bit of output,
-hashing 256100 input noise samples to seed the DRBG.
+hashing 25600 input noise samples to seed the DRBG.
 
 Online health tests are yet to be implemented.
 

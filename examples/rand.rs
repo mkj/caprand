@@ -22,7 +22,7 @@ use getrandom::register_custom_getrandom;
 async fn main(_spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
-    let mut gpio = p.PIN_25.degrade();
+    let mut gpio = p.PIN_10.degrade();
 
     caprand::setup(&mut gpio).unwrap();
 

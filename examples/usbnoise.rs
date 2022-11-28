@@ -26,8 +26,6 @@ use embassy_rp::usb::{Driver, Instance};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::{Builder, Config};
 
-use caprand::cap;
-
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     info!("top");

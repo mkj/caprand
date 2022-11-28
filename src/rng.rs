@@ -101,7 +101,7 @@ impl rand::CryptoRng for CapRng {
 }
 
 impl CapRng {
-    /// The number of noies samples to use for seeding.
+    /// The number of noise samples to use for seeding.
     ///
     /// We have 256 bits output seed, and assume a noise source entropy rate of at least 0.01
     pub const SEED_SAMPLES: usize = 256 * 100;
@@ -110,26 +110,26 @@ impl CapRng {
     /// should disable interrupts.
     fn new(pin: &mut impl Pin,
     ) -> Result<Self, getrandom::Error> {
-        let low_cycles = crate::cap::best_low_time(pin, 0..=100).unwrap();
-        trace!("low_cycles {}", low_cycles);
+        // let low_cycles = crate::cap::best_low_time(pin, 0..=100).unwrap();
+        let low_cycles = 1;
 
         let mut h = Sha256::new();
-        let mut count = 0;
-        crate::cap::noise(pin, low_cycles, |v| {
-            h.update(v.to_be_bytes());
-            count += 1;
-            count < Self::SEED_SAMPLES
-        }).map_err(
-            |_| {
-                warn!("Random generation failed");
-                error()
-            },
-        )?;
+        let mut noise = crate::cap::RawNoise::new(pin, low_cycles)
+            .map_err(|_| error())?;
+
+        let mut buf = [0u8; 100];
+        for _ in 0..256 {
+            for b in buf.iter_mut() {
+                let v = noise.next()
+                    // OK unwrap, iterator doesn't end
+                    .unwrap()
+                    .map_err(|_| error())?;
+                *b = v;
+            }
+
+            h.update(buf);
+        }
         let seed: [u8; 32] = h.finalize().into();
         Ok(Self(ChaCha20Rng::from_seed(seed)))
     }
 }
-
-
-// tests:
-// - f() is called the correct number of times, be exhaustive?
