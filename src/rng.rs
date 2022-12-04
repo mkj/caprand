@@ -39,9 +39,7 @@ static RNG: Mutex<RefCell<Option<CapRng>>> = Mutex::new(RefCell::new(None));
 /// # Examples
 ///
 /// ```
-/// fn main() {
-///     getrandom::register_custom_getrandom!(caprand::getrandom);
-/// }
+/// getrandom::register_custom_getrandom!(caprand::getrandom);
 /// ```
 pub fn getrandom(buf: &mut [u8]) -> Result<(), getrandom::Error> {
     critical_section::with(|cs| {
@@ -70,15 +68,13 @@ pub fn getrandom(buf: &mut [u8]) -> Result<(), getrandom::Error> {
 /// # Examples
 ///
 /// ```
-/// fn main() {
-///     let mut p = embassy_rp::init(Default::default());
+/// let mut p = embassy_rp::init(Default::default());
 ///
-///     caprand::setup(&mut p.PIN_10).unwrap();
-///     getrandom::register_custom_getrandom!(caprand::random);
+/// caprand::setup(&mut p.PIN_10).unwrap();
+/// getrandom::register_custom_getrandom!(caprand::random);
 ///
-///     let mut mystery = [0u8; 10];
-///     getrandom::getrandom(&mut mystery).unwrap();
-/// }
+/// let mut mystery = [0u8; 10];
+/// getrandom::getrandom(&mut mystery).unwrap();
 /// ```
 pub fn setup(
     pin: &mut impl Pin,
@@ -114,8 +110,7 @@ impl CapRng {
         let low_cycles = 1;
 
         let mut h = Sha256::new();
-        let mut noise = crate::cap::RawNoise::new(pin, low_cycles)
-            .map_err(|_| error())?;
+        let mut noise = crate::cap::RawNoise::new(pin, low_cycles);
 
         let mut buf = [0u8; 100];
         for _ in 0..256 {

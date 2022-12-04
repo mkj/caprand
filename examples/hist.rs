@@ -115,7 +115,7 @@ async fn main(_spawner: Spawner) {
             let low_cycles = cap::best_low_time(gpio, 30..=50u32).unwrap();
             let mut n = 0;
             let mut hist = [0u32; 33];
-            let noise = cap::RawNoise::new(gpio, low_cycles).unwrap();
+            let noise = cap::RawNoise::new(gpio, low_cycles);
             for v in noise.take(PRINT) {
                 let v = v.unwrap();
                 // info!("{}", v);

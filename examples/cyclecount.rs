@@ -112,7 +112,7 @@ async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, syst: &mut SYST, class: &
 
     // let low_cycles = caprand::cap::best_low_time(pin, 10..=90u32).unwrap();
     let low_cycles = 1;
-    let mut noise = caprand::cap::RawNoise::new(pin, low_cycles)?;
+    let mut noise = caprand::cap::RawNoise::new(pin, low_cycles);
     trace!("low_cycles = {}", low_cycles);
 
     let mut s = String::<64>::new();
@@ -126,10 +126,10 @@ async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, syst: &mut SYST, class: &
 
         // discard the first few
         for b in &buf[10..] {
-            if write!(s, "{}\n", b).is_err() {
+            if writeln!(s, "{}", b).is_err() {
                 class.write_packet(s.as_ref()).await.unwrap();
                 s.clear();
-                write!(s, "{}\n", b).unwrap();
+                writeln!(s, "{}", b).unwrap();
             }
         }
     }

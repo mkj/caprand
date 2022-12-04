@@ -105,16 +105,14 @@ async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, class: &mut CdcAcmClass<'
     // max packet is 64 bytes. We discard the first sample from the buffer.
     const CHUNK: usize = 32;
 
-    // let low_cycles = caprand::cap::best_low_time(pin, 10..=90u32).unwrap();
     let low_cycles = 1;
-    let mut noise = caprand::cap::RawNoise::new(pin, low_cycles)?;
-    trace!("low_cycles = {}", low_cycles);
+    let mut noise = caprand::cap::RawNoise::new(pin, low_cycles);
 
     loop {
         // discard one value at the top of the loop
         noise.next().unwrap()?;
 
-        let mut hex = ['B' as u8; CHUNK*2+1];
+        let mut hex = [b'B'; CHUNK*2+1];
         let mut m = hex.iter_mut();
         for _ in 0..CHUNK {
             let c = noise.next().unwrap()?;

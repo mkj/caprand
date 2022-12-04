@@ -12,17 +12,13 @@ use log::{debug, info, warn, error, trace};
 use defmt::{error, debug, info, panic, trace};
 
 use core::arch::asm;
-use core::mem::replace;
 
 use embassy_rp::gpio::Pin;
 use embassy_rp::pac;
 
-/// Extra iterations prior to taking output.
-const WARMUP: u8 = 5;
-
 /// Drives a pin low for an exact number of cycles.
 /// Call with interrupts disabled if it's important.
-pub fn exact_low(pin: &impl Pin, low_cycles: u32) {
+fn exact_low(pin: &impl Pin, low_cycles: u32) {
     let pin_num = pin.pin() as usize;
     let mask = 1u32 << pin_num;
     // pin low
@@ -148,7 +144,7 @@ fn time_rise(pin: &mut impl Pin, low_cycles: u32, syst: Option<&mut SYST>) -> Re
     let pin_num = pin.pin() as usize;
     let mask = 1u32 << pin_num;
 
-    let pad = pac::PADS_BANK0.gpio(pin_num as usize);
+    let pad = pac::PADS_BANK0.gpio(pin_num);
     // bank 0 single cycle IO in
     let gpio_in = pac::SIO.gpio_in(0).ptr();
 
@@ -156,7 +152,7 @@ fn time_rise(pin: &mut impl Pin, low_cycles: u32, syst: Option<&mut SYST>) -> Re
     unsafe { pad.modify(|s| s.set_pue(true)); }
 
     // Drive low for a number of cycles
-    let t = syst.map(|syst| SyTi::new(syst));
+    let t = syst.map(SyTi::new);
     exact_low(pin, low_cycles);
     if let Some(t) = t {
         let t = t.done()?;
@@ -228,7 +224,7 @@ pub fn lsb(v: u8) -> u8 {
             return i as u8
         }
     }
-    return 8
+    8
 }
 
 /// Wraps timing with SYST. The clock source must already be configured.
@@ -273,6 +269,10 @@ impl<'t> SyTi<'t> {
 ///
 /// Samples are correlated and biased, so must be processed before
 /// further use, using a cryptographic extractor or similar scheme.
+///
+/// It is advisable to collect output from RawNoise into a buffer and discard
+/// the first couple of samples - time will vary due to XIP cache loads from flash,
+/// as well as charge time varying for the capacitor's first cycle.
 pub struct RawNoise<'a, P: Pin> {
     pin: &'a mut P,
     low_cycles: u32,
@@ -280,21 +280,18 @@ pub struct RawNoise<'a, P: Pin> {
 }
 
 impl<'a, P: Pin> RawNoise<'a, P> {
-    pub fn new(pin: &'a mut P, low_cycles: u32) -> Result<Self, ()> {
+    pub fn new(pin: &'a mut P, low_cycles: u32) -> Self {
         let setup = PinSetup::new(pin.pin());
-        let mut s = Self {
+        Self {
             pin,
             low_cycles,
             _setup: setup,
-        };
-
-        for _ in 0..WARMUP {
-            // OK unwrap: iterator never ends
-            s.next().unwrap()?;
         }
-        Ok(s)
     }
 
+    /// Returns the next sample as a total cycle count.
+    ///
+    /// This cycle count is only relative for comparison between samples.
     pub fn next_with_systick(&mut self, syst: &mut SYST) -> Result<u32, ()> {
         critical_section::with(|_cs| {
             let t = SyTi::new(syst);
@@ -312,60 +309,29 @@ impl<P: Pin> Iterator for RawNoise<'_, P> {
     fn next(&mut self) -> Option<Self::Item> {
         let r = critical_section::with(|_cs| {
             let r = time_rise(self.pin, self.low_cycles, None)?;
-            Ok(r as u8)
+            Ok(r)
         });
         Some(r)
     }
 }
 
-pub fn bits_to_bytes(i: impl Iterator<Item = Result<bool, ()>>) ->
-        impl Iterator<Item = Result<u8, ()>> {
-    let mut pos = 0;
-    let mut acc = 0;
-    i.filter_map(move |r| {
-        if let Ok(r) = r {
-            // trace!("{}", r as u8);
-            acc |= (r as u8) << pos;
-            pos += 1;
-            if pos == 8 {
-                pos = 0;
-                Some(Ok(replace(&mut acc, 0)))
-            } else {
-                None
-            }
-        } else {
-            Some(Err(()))
-        }
-    })
-}
-
-
-pub struct Pairs<I> {
-    iter: I,
-}
-
-impl<I> Iterator for Pairs<I>
-    where I: Iterator<Item = Result<u8, ()>>
-{
-    type Item = (I::Item, I::Item);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let a = self.iter.next()?;
-        let b = self.iter.next()?;
-        // trace!("{} {}", a, b);
-
-        Some((a,b))
-    }
-}
-
 /// Determines a good pull-low time to use for the capacitor
+///
+/// This returns the time having the highest min-entropy measured from
+/// a number of iterations. That corresponds to the time giving the lowest
+/// likelihood (or histogram count) for the most likely value in the histogram.
 pub fn best_low_time(pin: &mut impl Pin, times: impl IntoIterator<Item = u32>) -> Result<u32, ()> {
     const ITERS: usize = 200;
+    const WARMUP: usize = 5;
     let mut best = None;
     for t in times {
         let mut hist = [0u32; 64];
         let mut hd = [0u32; 9];
-        let noise = RawNoise::new(pin, t)?;
+        let mut noise = RawNoise::new(pin, t);
+        // warmup
+        for _ in 0..WARMUP {
+            let _ = noise.next();
+        }
         for v in noise.take(ITERS) {
             let v = v?;
             hist[v as usize] += 1;
@@ -393,6 +359,10 @@ pub fn best_low_time(pin: &mut impl Pin, times: impl IntoIterator<Item = u32>) -
     Ok(best.unwrap().0)
 }
 
+/// Configures a GPIO pin and cleans up afterwards
+///
+/// This is equivalent to setup performed by embassy-rp HAL, but
+/// works with a borrowed PAC pin that can be re-used later by the application.
 struct PinSetup {
     pin: u8,
     // previous values to restore

@@ -97,33 +97,13 @@ async fn main(_spawner: Spawner) {
 }
 
 fn bin_5bits(c: u8) -> [char; 5] {
-    let v = [
+    [
         c,
         c >> 1,
         c >> 2,
         c >> 3,
         c >> 4,
-    ].map(|x| if (x&1) == 0 { '_' } else { '+' });
-
-    // trace!("{:02x} {} {} {} {} {} a", c, v[0], v[1], v[2], v[3], v[4]);
-
-    // for x in v.iter_mut().take_while(|x| **x == '_') {
-    //     *x = ' '
-    // }
-
-    // for i in 0..5 {
-    //     let i = 5 - i;
-    //     // trace!("{} {} {}", i, v[i-1], v[i]);
-    //     if v[i] == '-' && v[i-1] == '-' {
-    //         // trace!("sp");
-    //         v[i] = ' '
-    //     } else {
-    //         // trace!("br");
-    //         break
-    //     }
-    // }
-    // trace!("{:02x} {} {} {} {} {} b", c, v[0], v[1], v[2], v[3], v[4]);
-    v
+    ].map(|x| if (x&1) == 0 { '_' } else { '+' })
 }
 
 async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, class: &mut CdcAcmClass<'d, Driver<'d, T>>) -> Result<(), ()> {
@@ -135,7 +115,7 @@ async fn run<'d, T: Instance + 'd>(pin: &mut impl Pin, class: &mut CdcAcmClass<'
     let low_cycles = caprand::cap::best_low_time(pin, 10..=90u32).unwrap();
     trace!("low_cycles = {}", low_cycles);
     let low_cycles = 1;
-    let mut noise = caprand::cap::RawNoise::new(pin, low_cycles)?;
+    let mut noise = caprand::cap::RawNoise::new(pin, low_cycles);
 
     // let mut noise = noise.filter(|v| {
     //     if let Ok(v) = v {
