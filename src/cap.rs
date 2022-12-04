@@ -187,8 +187,6 @@ fn time_rise(pin: &mut impl Pin, low_cycles: u32, syst: Option<&mut SYST>) -> Re
             // Loop if bit set, 2 cycles
             "beq 222b",
 
-            // return last sample in x5
-            "mov {mask}, r7",
             // restore
             "mov r7, r10",
 

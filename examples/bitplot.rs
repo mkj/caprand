@@ -41,14 +41,10 @@ async fn main(_spawner: Spawner) {
     let driver = Driver::new(p.USB, irq);
 
     // Create embassy-usb Config
-    let mut config = Config::new(0xc0de, 0xcafe);
-    config.manufacturer = Some("Embassy");
-    config.product = Some("USB noise");
-    config.serial_number = Some("12345678");
-    // let mut config = Config::new(0x6666, 0x628d);
-    // config.manufacturer = Some("Matt");
-    // config.product = Some("Noise");
-    // config.serial_number = Some("12345");
+    let mut config = Config::new(0x6666, 0x5c4f);
+    config.manufacturer = Some("Matt Johnston");
+    config.product = Some("caprand bitplot");
+    config.serial_number = Some("1122");
     config.max_power = 100;
     config.max_packet_size_0 = 64;
 
