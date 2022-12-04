@@ -90,7 +90,7 @@ async fn main(_spawner: Spawner) {
 
     let syst = &mut cp.SYST;
     // This might break embassy if we were using async timers.
-    // syst.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
+    syst.set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
 
     // Do stuff with the class!
     let echo_fut = async {
