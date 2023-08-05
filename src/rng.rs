@@ -128,7 +128,7 @@ impl CapRng {
             }
 
             // even "invalid" samples are included in the hash
-            h.update(&[v]);
+            h.update([v]);
         }
 
         let seed: [u8; 32] = h.finalize().into();
