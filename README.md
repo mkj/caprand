@@ -39,6 +39,9 @@ The noise source has not been thoroughly quantified. Empirical testing seems
 to show 1-2 bits per sample. As a workaround it takes 100 noise samples per bit of output,
 hashing 25600 input noise samples to seed the DRBG.
 
+![A 160x160 random square](docs/25600.png)  
+(typical 25600 samples taken from usbnoise example)
+
 Basic health tests (Adaptive Proportion and Repetition) are applied.
 
 The hardware scheme has no protection against local interference (similar to the RP2040 itself).
