@@ -298,7 +298,7 @@ impl<'t> SyTi<'t> {
 
 /// A noise source iterator using a capacitor on a GPIO pin.
 ///
-/// For each output sample it drives  pin low, then times
+/// For each output sample it drives a pin low, then times
 /// how long it takes to rise to logic high. `low_cycles` is the amount of
 /// time to hold the pin low to discharge the capacitor.
 /// As the pullup charges the capacitor, it samples on every

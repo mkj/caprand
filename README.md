@@ -59,5 +59,5 @@ Examples must be built with `--features defmt`.
 
 [usbnoise](examples/usbnoise.rs) outputs raw samples as hex values, as a USB serial device
 
-[sernoise](examples/sernoise.rs) outputs raw samples as hex values, as a USB serial device
+[sernoise](examples/sernoise.rs) outputs raw samples as hex values, via the rp2040 uart
 
