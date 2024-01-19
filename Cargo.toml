@@ -8,6 +8,10 @@ repository = "https://github.com/mkj/caprand"
 authors = ["Matt Johnston <matt@ucc.asn.au>"]
 categories = ["embedded", "cryptography"]
 keywords = ["rp2040", "rng", "getrandom"]
+# avoid images
+exclude = [
+    "docs/*",
+]
 
 [dependencies]
 cortex-m = "0.7"
