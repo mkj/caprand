@@ -4,7 +4,6 @@
 
 #![no_std]
 #![no_main]
-#![feature(type_alias_impl_trait)]
 
 #[allow(unused_imports)]
 use defmt::{debug, info, warn, error};
@@ -53,6 +52,7 @@ async fn main(_spawner: Spawner) {
     let mut device_descriptor = [0; 256];
     let mut config_descriptor = [0; 256];
     let mut bos_descriptor = [0; 256];
+    let mut msos_descriptor = [0; 16];
     let mut control_buf = [0; 64];
 
     let mut state = State::new();
@@ -63,6 +63,7 @@ async fn main(_spawner: Spawner) {
         &mut device_descriptor,
         &mut config_descriptor,
         &mut bos_descriptor,
+        &mut msos_descriptor,
         &mut control_buf,
     );
 
@@ -89,15 +90,6 @@ async fn main(_spawner: Spawner) {
     join(usb_fut, echo_fut).await;
 }
 
-fn nibble_hex(c: u8) -> u8 {
-    debug_assert!(c <= 0xf);
-    if c < 10 {
-        b'0' + c
-    } else {
-        b'a' - 0xa + c
-    }
-}
-
 async fn run<'d, D: embassy_usb_driver::Driver<'d>>(pin: &mut impl Pin, class: &mut CdcAcmClass<'d, D>) -> Result<(), ()> {
 
     let low_cycles = 1;
@@ -110,7 +102,7 @@ async fn run<'d, D: embassy_usb_driver::Driver<'d>>(pin: &mut impl Pin, class: &
         // usb packet has 64 limit
         let mut b = heapless::String::<64>::new();
         while b.len() <= b.capacity() - 2 {
-            let (c, valid) = noise.next().unwrap();
+            let (c, _valid) = noise.next().unwrap();
             write!(b, "{:02x}\n", c).unwrap();
             // if valid {
             //     write!(b, "{}\n", caprand::cap::lsb(c)).unwrap();

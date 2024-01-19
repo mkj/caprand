@@ -4,7 +4,6 @@
 
 #![no_std]
 #![no_main]
-#![feature(type_alias_impl_trait)]
 
 #[allow(unused_imports)]
 use defmt::{debug, info, warn, error};
@@ -12,12 +11,10 @@ use {defmt_rtt as _, panic_probe as _};
 
 use embassy_rp::gpio;
 use embassy_executor::Spawner;
-use embassy_futures::join::join;
-use embassy_time::Timer;
 use embassy_rp::uart::{BufferedInterruptHandler, BufferedUart, Config};
 use embassy_rp::peripherals::UART0;
 use embassy_rp::bind_interrupts;
-use embedded_io::asynch::Write as _;
+use embedded_io_async::Write as _;
 
 bind_interrupts!(struct Irqs {
     UART0_IRQ => BufferedInterruptHandler<UART0>;
