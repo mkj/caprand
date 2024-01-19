@@ -1,11 +1,13 @@
 [package]
 name = "caprand"
-description = "RP2040 random number generator by timing capacitor pullup"
+description = "RP2040 secure random number generator by timing capacitor pullup"
 version = "0.1.0"
 edition = "2021"
 license = "0BSD"
 repository = "https://github.com/mkj/caprand"
 authors = ["Matt Johnston <matt@ucc.asn.au>"]
+categories = ["embedded", "cryptography"]
+keywords = ["rp2040", "rng", "getrandom"]
 
 [dependencies]
 cortex-m = "0.7"
