@@ -1,5 +1,7 @@
 # RP2040 entropy source
 
+[Docs](https://docs.rs/caprand) [`caprand` crate](https://crates.io/crates/caprand)
+
 This is a random number generator for a RP2040. It requires one hardware component,
 a capacitor between a GPIO pin and ground. It should be treated as a proof of concept,
 it requires further analysis before use in applications with consequences.
