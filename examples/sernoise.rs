@@ -35,7 +35,7 @@ async fn main(_spawner: Spawner) {
     let mut conf = Config::default();
     conf.baudrate = 2500000;
     let uart = BufferedUart::new(uart, Irqs, tx_pin, rx_pin, &mut tx_buf, &mut rx_buf, conf);
-    let (_rx, mut tx) = uart.split();
+    let (mut tx, _rx) = uart.split();
 
 
     let mut cap_pin = p.PIN_10;

@@ -195,10 +195,6 @@ fn time_rise(pin: &mut impl Pin, low_cycles: u32) -> u8 {
         asm!(
             // save (rust asm doesn't handle frame pointer r7)
             "mov r10, r7",
-            "nop",
-            "nop",
-            "nop",
-
             "222:",
             // read gpio_in register, 6 cycles
             "ldr {x0}, [{gpio_in}]",
@@ -211,10 +207,8 @@ fn time_rise(pin: &mut impl Pin, low_cycles: u32) -> u8 {
             "ands r7, {mask}",
             // Loop if bit set, 2 cycles
             "beq 222b",
-
             // restore
             "mov r7, r10",
-
             mask = in(reg) mask,
             gpio_in = in(reg) gpio_in,
             x0 = out(reg) x0,
