@@ -15,8 +15,8 @@ exclude = [
 
 [dependencies]
 cortex-m = "0.7"
-embassy-rp = { version = "0.3", default-features = false, features = ["rp2040"] }
-rp-pac = { version = "6", default-features = false }
+embassy-rp = { version = "0.4", default-features = false }
+rp-pac = { version = "7", default-features = false }
 
 getrandom = { version = "0.2", default-features = false }
 rand = { version = "0.8", default-features = false }
@@ -39,9 +39,9 @@ defmt = { version = "0.3" }
 heapless = "0.8"
 
 # demos use embassy
-cortex-m-rt = "0.7"
 cortex-m = { version = "0.7", features = ["critical-section-single-core"]}
-embassy-rp = { version = "0.3",  features = ["time-driver"] }
+cortex-m-rt = "0.7"
+embassy-rp = { version = "0.4",  features = ["time-driver", "rp2040"] }
 embassy-usb-driver = { version = "0.1" }
 embassy-executor = { version = "0.7", features = ["executor-thread", "arch-cortex-m"] }
 embassy-usb = { version = "0.4.0", features = ["defmt"] }
