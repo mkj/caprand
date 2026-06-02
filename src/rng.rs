@@ -6,8 +6,8 @@ use log::{debug, error, info, trace, warn};
 #[allow(unused_imports)]
 use defmt::{debug, error, info, panic, trace, warn};
 
-use core::cell::RefCell;
 use core::ops::DerefMut;
+use core::{cell::RefCell, convert::Infallible};
 
 use critical_section::Mutex;
 use rand_chacha::ChaCha20Rng;
@@ -15,7 +15,8 @@ use sha2::{Digest, Sha256};
 
 use embassy_rp::{gpio::Pin, Peri};
 
-use rand_chacha::rand_core::{RngCore, SeedableRng};
+use rand::Rng;
+use rand_chacha::rand_core::SeedableRng;
 
 static RNG: Mutex<RefCell<Option<CapRng>>> = Mutex::new(RefCell::new(None));
 
@@ -103,8 +104,6 @@ pub fn setup(pin: Peri<impl Pin>) -> Result<(), ()> {
 /// A cryptographic PRNG seeded by the capacitor noise source.
 pub struct CapRng(ChaCha20Rng);
 
-impl rand::CryptoRng for CapRng {}
-
 impl CapRng {
     /// The number of noise samples to use for seeding.
     ///
@@ -152,20 +151,19 @@ impl CapRng {
     }
 }
 
-impl rand::RngCore for CapRng {
-    fn next_u32(&mut self) -> u32 {
-        self.0.next_u32()
+impl rand::TryCryptoRng for CapRng {}
+
+impl rand::TryRng for CapRng {
+    type Error = Infallible;
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        self.0.try_next_u32()
     }
 
-    fn next_u64(&mut self) -> u64 {
-        self.0.next_u64()
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        self.0.try_next_u64()
     }
 
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.0.fill_bytes(dest)
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
         self.0.try_fill_bytes(dest)
     }
 }

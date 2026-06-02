@@ -17,10 +17,10 @@ exclude = [
 cortex-m = "0.7"
 embassy-rp = { version = "0.10", default-features = false, features = ["rp2040", "unstable-pac"] }
 
-rand = { version = "0.8", default-features = false }
+rand = { version = "0.10", default-features = false }
 critical-section = "1.2"
 sha2 = { version = "0.10", default-features = false }
-rand_chacha = { version = "0.3", default-features = false }
+rand_chacha = { version = "0.10", default-features = false }
 
 log = { version = "0.4", default-features = false }
 defmt = { version = "1.1", optional = true }
