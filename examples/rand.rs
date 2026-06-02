@@ -6,11 +6,11 @@
 use core::fmt::Write;
 
 #[allow(unused_imports)]
-use defmt::{debug, info, warn, error};
+use defmt::{debug, error, info, warn};
 use {defmt_rtt as _, panic_probe as _};
 
 use embassy_executor::Spawner;
-use embassy_time::{Timer, Duration};
+use embassy_time::{Duration, Timer};
 
 use getrandom::register_custom_getrandom;
 

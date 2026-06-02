@@ -6,14 +6,14 @@
 #![no_main]
 
 #[allow(unused_imports)]
-use defmt::{debug, info, warn, error};
+use defmt::{debug, error, info, warn};
 use {defmt_rtt as _, panic_probe as _};
 
-use embassy_rp::gpio;
 use embassy_executor::Spawner;
-use embassy_rp::uart::{BufferedInterruptHandler, BufferedUart, Config};
-use embassy_rp::peripherals::UART0;
 use embassy_rp::bind_interrupts;
+use embassy_rp::gpio;
+use embassy_rp::peripherals::UART0;
+use embassy_rp::uart::{BufferedInterruptHandler, BufferedUart, Config};
 use embedded_io_async::Write as _;
 
 bind_interrupts!(struct Irqs {
@@ -34,9 +34,16 @@ async fn main(_spawner: Spawner) {
     let mut rx_buf = [0u8; 16];
     let mut conf = Config::default();
     conf.baudrate = 2500000;
-    let uart = BufferedUart::new(uart, Irqs, tx_pin, rx_pin, &mut tx_buf, &mut rx_buf, conf);
+    let uart = BufferedUart::new(
+        uart,
+        Irqs,
+        tx_pin,
+        rx_pin,
+        &mut tx_buf,
+        &mut rx_buf,
+        conf,
+    );
     let (mut tx, _rx) = uart.split();
-
 
     let mut cap_pin = p.PIN_10;
 

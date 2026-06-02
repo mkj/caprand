@@ -163,7 +163,6 @@ fn time_rise_noasm(pin: &mut impl Pin, _low_cycles: u32) -> u8 {
     c
 }
 
-
 /// Drives a pin low then times how long it takes to rise to logic high.
 ///
 /// `low_cycles` is the amount of time to hold the pin low to discharge
@@ -269,13 +268,13 @@ struct SyTi<'t> {
 impl<'t> SyTi<'t> {
     /// panics if `syst` is not using the core clock.
     fn new(syst: &'t mut SYST) -> Self {
-        assert!(syst.get_clock_source() == cortex_m::peripheral::syst::SystClkSource::Core);
+        assert!(
+            syst.get_clock_source()
+                == cortex_m::peripheral::syst::SystClkSource::Core
+        );
         syst.clear_current();
         syst.enable_counter();
-        Self {
-            syst,
-            t1: SYST::get_reload(),
-        }
+        Self { syst, t1: SYST::get_reload() }
     }
 
     /// returns the duration, or failure on overflow
@@ -315,11 +314,7 @@ pub struct RawNoise<'a, P: Pin> {
 impl<'a, P: Pin> RawNoise<'a, P> {
     pub fn new(pin: &'a mut P, low_cycles: u32) -> Self {
         let setup = PinSetup::new(pin.pin());
-        Self {
-            pin,
-            low_cycles,
-            _setup: setup,
-        }
+        Self { pin, low_cycles, _setup: setup }
     }
 
     /// Returns the next sample as a total cycle count.
@@ -342,9 +337,7 @@ impl<P: Pin> Iterator for RawNoise<'_, P> {
     type Item = (u8, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let r = critical_section::with(|_cs| {
-            time_rise(self.pin, self.low_cycles)
-        });
+        let r = critical_section::with(|_cs| time_rise(self.pin, self.low_cycles));
         let valid = (r & 1) == 0;
         Some((r, valid))
     }
@@ -366,16 +359,17 @@ struct PinSetup {
 
 impl PinSetup {
     fn new(pin_num: u8) -> Self {
-        let (schmitt, ie, pde, pue) = pac::PADS_BANK0.gpio(pin_num as usize).modify(|s| {
-            let prev = (s.schmitt(), s.ie(), s.pde(), s.pue());
-            // Disabling the Schmitt Trigger seems sensible.
-            s.set_schmitt(false);
-            // Input enable
-            s.set_ie(true);
-            // No pulldown
-            s.set_pde(false);
-            prev
-        });
+        let (schmitt, ie, pde, pue) =
+            pac::PADS_BANK0.gpio(pin_num as usize).modify(|s| {
+                let prev = (s.schmitt(), s.ie(), s.pde(), s.pue());
+                // Disabling the Schmitt Trigger seems sensible.
+                s.set_schmitt(false);
+                // Input enable
+                s.set_ie(true);
+                // No pulldown
+                s.set_pde(false);
+                prev
+            });
 
         // Use SIO, single cycle IO
         let func = pac::IO_BANK0.gpio(pin_num as usize).ctrl().modify(|s| {
@@ -384,14 +378,7 @@ impl PinSetup {
             func
         });
 
-        PinSetup {
-            pin: pin_num,
-            schmitt,
-            ie,
-            pde,
-            pue,
-            func,
-        }
+        PinSetup { pin: pin_num, schmitt, ie, pde, pue, func }
     }
 }
 

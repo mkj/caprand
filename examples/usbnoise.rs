@@ -6,24 +6,24 @@
 #![no_main]
 
 #[allow(unused_imports)]
-use defmt::{debug, info, warn, error};
+use defmt::{debug, error, info, warn};
 use {defmt_rtt as _, panic_probe as _};
 
 use core::fmt::Write;
 
-use embassy_rp::gpio::Pin;
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_rp::bind_interrupts;
+use embassy_rp::gpio::Pin;
 use embassy_rp::peripherals::USB;
+use embassy_rp::usb::InterruptHandler;
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
-use embassy_rp::usb::{InterruptHandler};
 use embassy_usb::{Builder, Config};
 
 bind_interrupts!(struct Irqs {
     USBCTRL_IRQ => InterruptHandler<USB>;
 });
-    
+
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     info!("top");
@@ -88,8 +88,10 @@ async fn main(_spawner: Spawner) {
     join(usb_fut, echo_fut).await;
 }
 
-async fn run<'d, D: embassy_usb_driver::Driver<'d>>(pin: &mut impl Pin, class: &mut CdcAcmClass<'d, D>) -> Result<(), ()> {
-
+async fn run<'d, D: embassy_usb_driver::Driver<'d>>(
+    pin: &mut impl Pin,
+    class: &mut CdcAcmClass<'d, D>,
+) -> Result<(), ()> {
     let low_cycles = 1;
     let mut noise = caprand::cap::RawNoise::new(pin, low_cycles);
 

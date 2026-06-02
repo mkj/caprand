@@ -121,8 +121,11 @@ impl CapRng {
                     valid_samples = 0;
                     failures += 1;
                     if failures > Self::MAX_FAILURES {
-                        error!("Health tests failed after {} retries", Self::MAX_FAILURES);
-                        return Err(error())
+                        error!(
+                            "Health tests failed after {} retries",
+                            Self::MAX_FAILURES
+                        );
+                        return Err(error());
                     }
                 }
             }

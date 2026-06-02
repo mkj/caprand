@@ -15,10 +15,7 @@ impl Repetition {
     fn new() -> Self {
         // Initialising with count = 0 means
         // the fixed initial `prev` value doesn't matter.
-        Self {
-            prev: 0u8,
-            count: 0,
-        }
+        Self { prev: 0u8, count: 0 }
     }
 
     /// Returns the running repetition count for the given value
@@ -43,10 +40,7 @@ pub struct RepetitionTest {
 
 impl RepetitionTest {
     pub fn new(cutoff: usize) -> Self {
-        Self {
-            r: Repetition::new(),
-            cutoff,
-        }
+        Self { r: Repetition::new(), cutoff }
     }
 
     pub fn test(&mut self, val: u8) -> Result<(), ()> {
@@ -78,13 +72,7 @@ pub struct AdaptiveProportionTest {
 
 impl AdaptiveProportionTest {
     pub fn new(window: usize, cutoff: usize) -> Self {
-        Self {
-            val: 0,
-            matches: 0,
-            i: 0,
-            window,
-            cutoff,
-        }
+        Self { val: 0, matches: 0, i: 0, window, cutoff }
     }
 
     pub fn test(&mut self, val: u8) -> Result<(), ()> {
