@@ -14,13 +14,13 @@ use defmt::{debug, error, info, trace};
 use core::arch::asm;
 
 use embassy_rp::gpio::Pin;
-use rp_pac as pac;
+use embassy_rp::{pac, Peri};
 
 /// Drives a pin low for an exact number of cycles.
 ///
 /// Will be called with the pin output disabled.
 /// Call with interrupts disabled if it's important.
-fn exact_low(pin: &impl Pin, low_cycles: u32) {
+fn exact_low<P: Pin>(pin: &Peri<P>, low_cycles: u32) {
     let pin_num = pin.pin() as usize;
     let mask = 1u32 << pin_num;
     // set pin value low. not out enabled yet
@@ -170,7 +170,7 @@ fn time_rise_noasm(pin: &mut impl Pin, _low_cycles: u32) -> u8 {
 /// clock cycles in bursts of 6 bits. When the final bit of a burst is high,
 /// it returns that 5-bit burst as the value (ignoring last bit which is always
 /// high)
-fn time_rise(pin: &mut impl Pin, low_cycles: u32) -> u8 {
+fn time_rise<P: Pin>(pin: &Peri<P>, low_cycles: u32) -> u8 {
     let pin_num = pin.pin() as usize;
     let mask = 1u32 << pin_num;
 
@@ -306,13 +306,13 @@ impl<'t> SyTi<'t> {
 /// the first couple of samples - time will vary due to XIP cache loads from flash,
 /// as well as charge time varying for the capacitor's first cycle.
 pub struct RawNoise<'a, P: Pin> {
-    pin: &'a mut P,
+    pin: Peri<'a, P>,
     low_cycles: u32,
     _setup: PinSetup,
 }
 
 impl<'a, P: Pin> RawNoise<'a, P> {
-    pub fn new(pin: &'a mut P, low_cycles: u32) -> Self {
+    pub fn new(pin: Peri<'a, P>, low_cycles: u32) -> Self {
         let setup = PinSetup::new(pin.pin());
         Self { pin, low_cycles, _setup: setup }
     }
@@ -323,7 +323,7 @@ impl<'a, P: Pin> RawNoise<'a, P> {
     pub fn next_with_systick(&mut self, syst: &mut SYST) -> Result<u32, ()> {
         critical_section::with(|_cs| {
             let t = SyTi::new(syst);
-            let r = time_rise(self.pin, self.low_cycles);
+            let r = time_rise(&self.pin, self.low_cycles);
             let t = t.done()?;
             let t = t + lsb(r) as u32;
             Ok(t)
@@ -337,7 +337,7 @@ impl<P: Pin> Iterator for RawNoise<'_, P> {
     type Item = (u8, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let r = critical_section::with(|_cs| time_rise(self.pin, self.low_cycles));
+        let r = critical_section::with(|_cs| time_rise(&self.pin, self.low_cycles));
         let valid = (r & 1) == 0;
         Some((r, valid))
     }

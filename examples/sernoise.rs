@@ -36,18 +36,18 @@ async fn main(_spawner: Spawner) {
     conf.baudrate = 2500000;
     let uart = BufferedUart::new(
         uart,
-        Irqs,
         tx_pin,
         rx_pin,
+        Irqs,
         &mut tx_buf,
         &mut rx_buf,
         conf,
     );
     let (mut tx, _rx) = uart.split();
 
-    let mut cap_pin = p.PIN_10;
+    let cap_pin = p.PIN_10;
 
-    let mut noise = caprand::cap::RawNoise::new(&mut cap_pin, 1);
+    let mut noise = caprand::cap::RawNoise::new(cap_pin, 1);
 
     loop {
         led.toggle();

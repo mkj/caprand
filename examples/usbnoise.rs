@@ -13,10 +13,10 @@ use core::fmt::Write;
 
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
-use embassy_rp::bind_interrupts;
 use embassy_rp::gpio::Pin;
 use embassy_rp::peripherals::USB;
 use embassy_rp::usb::InterruptHandler;
+use embassy_rp::{bind_interrupts, Peri};
 use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 use embassy_usb::{Builder, Config};
 
@@ -79,7 +79,7 @@ async fn main(_spawner: Spawner) {
         loop {
             class.wait_connection().await;
             info!("Connected");
-            let pin = &mut p.PIN_10;
+            let pin = p.PIN_10.reborrow();
             let _ = run(pin, &mut class).await;
             info!("Disconnected");
         }
@@ -89,7 +89,7 @@ async fn main(_spawner: Spawner) {
 }
 
 async fn run<'d, D: embassy_usb_driver::Driver<'d>>(
-    pin: &mut impl Pin,
+    pin: Peri<'_, impl Pin>,
     class: &mut CdcAcmClass<'d, D>,
 ) -> Result<(), ()> {
     let low_cycles = 1;

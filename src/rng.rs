@@ -14,7 +14,7 @@ use critical_section::Mutex;
 use rand_chacha::ChaCha20Rng;
 use sha2::{Digest, Sha256};
 
-use embassy_rp::gpio::Pin;
+use embassy_rp::{gpio::Pin, Peri};
 
 use rand_chacha::rand_core::{RngCore, SeedableRng};
 
@@ -75,7 +75,7 @@ pub fn getrandom(buf: &mut [u8]) -> Result<(), getrandom::Error> {
 /// let mut mystery = [0u8; 10];
 /// getrandom::getrandom(&mut mystery).unwrap();
 /// ```
-pub fn setup(pin: &mut impl Pin) -> Result<(), getrandom::Error> {
+pub fn setup(pin: Peri<impl Pin>) -> Result<(), getrandom::Error> {
     let r = CapRng::new(pin)?;
 
     critical_section::with(|cs| {
@@ -100,7 +100,7 @@ impl CapRng {
 
     const MAX_FAILURES: usize = 3;
 
-    pub fn new(pin: &mut impl Pin) -> Result<Self, getrandom::Error> {
+    pub fn new(pin: Peri<impl Pin>) -> Result<Self, getrandom::Error> {
         let low_cycles = 1;
         let mut noise = crate::cap::RawNoise::new(pin, low_cycles);
 
