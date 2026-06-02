@@ -12,8 +12,6 @@ use {defmt_rtt as _, panic_probe as _};
 use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer};
 
-use getrandom::register_custom_getrandom;
-
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
@@ -21,11 +19,10 @@ async fn main(_spawner: Spawner) {
     let gpio = p.PIN_10;
 
     caprand::setup(gpio).unwrap();
-    register_custom_getrandom!(caprand::getrandom);
 
     loop {
         let mut mystery = [0u8; 10];
-        getrandom::getrandom(mystery.as_mut_slice()).unwrap();
+        getrandom::fill(mystery.as_mut_slice()).unwrap();
 
         let mut s = heapless::String::<33>::new();
         for m in mystery.iter() {
@@ -34,4 +31,12 @@ async fn main(_spawner: Spawner) {
         info!("mystery bytes!  {}", s.as_str());
         Timer::after(Duration::from_millis(333)).await;
     }
+}
+
+#[unsafe(no_mangle)]
+unsafe extern "Rust" fn __getrandom_v03_custom(
+    dest: *mut u8,
+    len: usize,
+) -> Result<(), getrandom::Error> {
+    caprand::getrandom_raw(dest, len).map_err(|_| getrandom::Error::new_custom(123))
 }

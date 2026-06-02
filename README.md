@@ -13,11 +13,21 @@ An end program would use [getrandom](https://docs.rs/getrandom) with `custom` fe
 see [rand](examples/rand.rs) example.
 
 ```rust
-    caprand::setup(&mut p.PIN_10).expect("RNG setup failed");
-    getrandom::register_custom_getrandom!(caprand::random);
-    // ...
-    let mut key = [0u8; 32];
-    getrandom::getrandom(&key).unwrap();
+    // Early init
+    caprand::setup(&mut p.PIN_10).unwrap();
+    
+    // Use a getrandom custom backend
+    #[unsafe(no_mangle)]
+    unsafe extern "Rust" fn __getrandom_v03_custom(
+    dest: *mut u8,
+    len: usize,
+    ) -> Result<(), getrandom::Error> {
+    caprand::getrandom_raw(dest, len).map_err(|_| getrandom::Error::new_custom(123))
+    }
+    
+    // Application code
+    let mut mystery = [0u8; 10];
+    getrandom::getrandom(&mut mystery).unwrap();
 ```
 
 ## Operation

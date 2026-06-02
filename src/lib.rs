@@ -5,4 +5,4 @@ pub mod cap;
 pub mod health;
 pub mod rng;
 
-pub use rng::{getrandom, setup, CapRng};
+pub use rng::{getrandom, getrandom_raw, setup, CapRng};

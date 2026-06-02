@@ -7,7 +7,6 @@ use log::{debug, error, info, trace, warn};
 use defmt::{debug, error, info, panic, trace, warn};
 
 use core::cell::RefCell;
-use core::num::NonZeroU32;
 use core::ops::DerefMut;
 
 use critical_section::Mutex;
@@ -18,29 +17,16 @@ use embassy_rp::{gpio::Pin, Peri};
 
 use rand_chacha::rand_core::{RngCore, SeedableRng};
 
-// arbitrary constant
-pub const CAPRAND_ERR: u32 = getrandom::Error::CUSTOM_START + 510132368;
-
-pub fn error() -> getrandom::Error {
-    // OK unwrap: const value is nonzero
-    let c: NonZeroU32 = CAPRAND_ERR.try_into().unwrap();
-    c.into()
-}
-
 static RNG: Mutex<RefCell<Option<CapRng>>> = Mutex::new(RefCell::new(None));
 
-/// A random byte generator for use with `register_custom_getrandom`
+/// A random byte generator.
 ///
+/// `buf` will be filled with random bytes.
 /// [`setup()`](setup) must be called prior to using this function.
 ///
-/// See documentation of [`getrandom::register_custom_getrandom`](getrandom::register_custom_getrandom).
-///
-/// # Examples
-///
-/// ```
-/// getrandom::register_custom_getrandom!(caprand::getrandom);
-/// ```
-pub fn getrandom(buf: &mut [u8]) -> Result<(), getrandom::Error> {
+/// This may be used by an application's getrandom custom backend,
+/// see getrandom documentation.
+pub fn getrandom(buf: &mut [u8]) -> Result<(), ()> {
     critical_section::with(|cs| {
         let mut rng = RNG.borrow_ref_mut(cs);
         let rng = rng.deref_mut();
@@ -49,9 +35,27 @@ pub fn getrandom(buf: &mut [u8]) -> Result<(), getrandom::Error> {
             Ok(())
         } else {
             error!("setup() not called");
-            Err(error())
+            Err(())
         }
     })
+}
+
+/// A random byte generator suitable for getrandom custom backends.
+///
+/// `dest` will be filled with `len` random bytes.
+/// Call this from a `__getrandom_v03_custom()`, see getrandom crate
+/// documentation.
+///
+/// # Safety
+///
+/// `dest` and `len` must be a valid destination to write. `dest`
+/// does not need to contain initialised memory.
+pub unsafe fn getrandom_raw(dest: *mut u8, len: usize) -> Result<(), ()> {
+    let buf = unsafe {
+        core::ptr::write_bytes(dest, 0, len);
+        core::slice::from_raw_parts_mut(dest, len)
+    };
+    getrandom(buf)
 }
 
 /// Seed the random generator from a capacitor noise source.
@@ -70,12 +74,21 @@ pub fn getrandom(buf: &mut [u8]) -> Result<(), getrandom::Error> {
 /// let mut p = embassy_rp::init(Default::default());
 ///
 /// caprand::setup(&mut p.PIN_10).unwrap();
-/// getrandom::register_custom_getrandom!(caprand::random);
+///
+/// #[unsafe(no_mangle)]
+/// unsafe extern "Rust" fn __getrandom_v03_custom(
+///     dest: *mut u8,
+///     len: usize,
+/// ) -> Result<(), getrandom::Error> {
+///     caprand::getrandom_raw(dest, len).map_err(|_| getrandom::Error::new_custom(123))
+/// }
 ///
 /// let mut mystery = [0u8; 10];
 /// getrandom::getrandom(&mut mystery).unwrap();
 /// ```
-pub fn setup(pin: Peri<impl Pin>) -> Result<(), getrandom::Error> {
+/// `getrandom` custom backend requires building with `--cfg getrandom_backend="custom",
+/// see [`getrandom`] documentation.
+pub fn setup(pin: Peri<impl Pin>) -> Result<(), ()> {
     let r = CapRng::new(pin)?;
 
     critical_section::with(|cs| {
@@ -100,7 +113,7 @@ impl CapRng {
 
     const MAX_FAILURES: usize = 3;
 
-    pub fn new(pin: Peri<impl Pin>) -> Result<Self, getrandom::Error> {
+    pub fn new(pin: Peri<impl Pin>) -> Result<Self, ()> {
         let low_cycles = 1;
         let mut noise = crate::cap::RawNoise::new(pin, low_cycles);
 
@@ -125,7 +138,7 @@ impl CapRng {
                             "Health tests failed after {} retries",
                             Self::MAX_FAILURES
                         );
-                        return Err(error());
+                        return Err(());
                     }
                 }
             }
