@@ -34,7 +34,7 @@ defmt = { version = "1.1", optional = true }
 getrandom = { version = "0.4" }
 
 # deps for demos
-panic-probe = { version = "0.3", features = ["print-defmt"] }
+panic-probe = { version = "1.0", features = ["print-defmt"] }
 defmt-rtt = { version = "1.2" }
 defmt = { version = "1.1" }
 heapless = "0.9"
