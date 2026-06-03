@@ -9,7 +9,7 @@ it requires further analysis before use in applications with consequences.
 This is based on Peter Allan’s [twocent](https://github.com/alwynallan/twocents), with
 half the component and pin count.
 
-An end program would use [getrandom](https://docs.rs/getrandom) with `custom` feature,
+An end program would use [getrandom](https://docs.rs/getrandom) with a custom backend,
 see [rand](examples/rand.rs) example.
 
 ```rust
