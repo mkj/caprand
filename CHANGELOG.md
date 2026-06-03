@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 - 2026-06-03
+
+- Update embassy-rp to 0.10
+- Update rand\_core to 0.10
+- Remove getrandom library dependency, add a helper for applications to
+  use getrandom 0.4
+
 ## 0.2.1 - 2025-06-02
 
 - Fix docs.rs by adding rp2040 feature
