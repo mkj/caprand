@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 - 2026-06-04
+
+- Fix docs.rs, no functional change.
+
 ## 0.3.0 - 2026-06-03
 
 - Update embassy-rp to 0.10
