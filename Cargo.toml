@@ -55,6 +55,3 @@ defmt = [ "dep:defmt" ]
 
 [profile.release]
 debug = 2
-
-[package.metadata.docs.rs]
-features = ["getrandom/custom", "embassy-rp/rp2040"]
